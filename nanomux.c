@@ -255,11 +255,19 @@ int main(int argc, char **argv) {
     char log_file[256];
     snprintf(log_file, sizeof(log_file), "%s/nanomux.log", output);
     FILE *LOG_FILE = fopen(log_file, "ab");
+    if (LOG_FILE == NULL) {
+        nob_log(NOB_ERROR, "Could create log file");
+        return 1;
+    }
     
     // create summary file
     char summary_file[256];
     snprintf(summary_file, sizeof(summary_file), "%s/nanomux_matches.csv", output);
     FILE *S_FILE = fopen(summary_file, "ab");
+    if (S_FILE == NULL) {
+        nob_log(NOB_ERROR, "Could create summary file");
+        return 1;
+    }
     fprintf(S_FILE, "barcode,matches\n");
     
     fprintf(LOG_FILE, "Nanomux\n\n");

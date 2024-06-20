@@ -3,6 +3,8 @@
 
 ## Quick Start
 ```bash
+$ git clone https://github.com/willros/nanomux_c.git
+$ cd nanomux_c/
 $ sh build.sh
 $ ./nanomux tests/bc_test.csv tests/test.fastq 600 2000 200 1 OUTPUT
 ```
@@ -15,7 +17,7 @@ usage:
    <barcode_pos: int> <k: int>
    <output folder: path>
 ```
-* barcode_pos: where to search for the barcode in the ends. 
+* barcode_pos: where to search for the barcode in the ends. if barcode_pos == 200 and the read length is 1000, the barcodes will be searched for from position 0 -> 200 and 800 -> 1000.
 * k: allowed number of mismatches
 
 ## Usage
