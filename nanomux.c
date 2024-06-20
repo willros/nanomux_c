@@ -232,7 +232,7 @@ int main(int argc, char **argv) {
     
     const char *program = nob_shift_args(&argc, &argv);
     if (argc < 7) {
-        nob_log(NOB_ERROR, "usage: %s <barcode_file: path> <fastq_file: path> <read_len_min: int> <read_len_max: int> <barcode_pos: int> <k: int> <output folder: path>", program);
+        nob_log(NOB_ERROR, "usage:\n   %s <barcode_file: path> <fastq_file: path>\n   <read_len_min: int> <read_len_max: int>\n   <barcode_pos: int> <k: int>\n   <output folder: path>", program);
         return 1;
     }
     
