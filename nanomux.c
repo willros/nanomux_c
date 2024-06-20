@@ -209,17 +209,6 @@ Barcodes parse_barcodes(Nob_String_View content) {
 }
 
 
-void print_barcode(Barcode *b) {
-    printf("FW: %.*s, RV: %.*s\n",
-           (int)b->fw_length, b->fw,
-           (int)b->rv_length, b->rv);
-}
-
-void print_reads(Read *r) {
-    printf("Read: %.*s\n", (int)r->length, r->seq);
-}
-
-
 void reverse_complement_barcode_rv(Barcode *barcode, uint8_t *comp_seq) {
     complement_sequence(barcode->rv, comp_seq, barcode->rv_length);
 }
@@ -261,12 +250,17 @@ int main(int argc, char **argv) {
     nob_log(NOB_INFO, "Output folder: %s", output);
 
     if (!nob_mkdir_if_not_exists(output)) return 1;
-    
-    
+   
     // create log file
     char log_file[256];
     snprintf(log_file, sizeof(log_file), "%s/nanomux.log", output);
     FILE *LOG_FILE = fopen(log_file, "ab");
+    
+    // create summary file
+    char summary_file[256];
+    snprintf(summary_file, sizeof(summary_file), "%s/nanomux_matches.csv", output);
+    FILE *S_FILE = fopen(summary_file, "ab");
+    fprintf(S_FILE, "barcode,matches\n");
     
     fprintf(LOG_FILE, "Nanomux\n\n");
     fprintf(LOG_FILE, "Barcodes: %s\n", barcode_file);
@@ -287,6 +281,7 @@ int main(int argc, char **argv) {
     Reads reads = parse_fastq(fastq_file, read_len_min, read_len_max);
     nob_log(NOB_INFO, "Number of reads: %zu", reads.count);
     fprintf(LOG_FILE, "Number of reads: %zu\n", reads.count);
+    printf("\n");
     
     fclose(LOG_FILE);
     
@@ -297,9 +292,7 @@ int main(int argc, char **argv) {
         
         int counter = 0;
         Barcode b = barcodes.items[i];
-        nob_log(NOB_INFO, "Name: "SV_Fmt, SV_Arg(b.name));
-        nob_log(NOB_INFO, "Fw: %.*s", b.fw_length, b.fw);
-        nob_log(NOB_INFO, "rv comp: %.*s", b.rv_length, b.rv_comp);
+        nob_log(NOB_INFO, "barcode: "SV_Fmt, SV_Arg(b.name));
         
         // save fastq
         char fastq_name[256]; 
@@ -338,12 +331,23 @@ int main(int argc, char **argv) {
                 }
             }
         }
+        
         nob_log(NOB_INFO, "matches: %i", counter);
-        nob_log(NOB_INFO, "Saving fastq file: %s", fastq_name);
-        printf("\n");
-        gzclose(new_fastq);
+        
+        if (counter == 0) {
+            nob_log(NOB_INFO, "No reads were found");
+            printf("\n");
+            gzclose(new_fastq);
+        } else {
+            nob_log(NOB_INFO, "Saving fastq file: %s", fastq_name);
+            printf("\n");
+            gzclose(new_fastq);
+        }
+        // write summary file
+        fprintf(S_FILE, "%.*s,%i\n", (int)b.name.count, b.name.data, counter);
     }
     
+    fclose(S_FILE);
     nob_log(NOB_INFO, "Done!");
     nob_da_free(barcodes);
     nob_da_free(reads);
