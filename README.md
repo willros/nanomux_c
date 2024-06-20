@@ -15,6 +15,15 @@ usage:
    <output folder: path>
 ```
 
+### Usage
+`barcode_file.csv` **MUST** have the follwing shape:
+```csv
+#name,forward_bc,reverse_bc
+bc1,ATACGATGCTA,GTCGATGTCTGA
+b2,GACACACAC,GTCGATTGATG
+...
+```
+
 
 
 
