@@ -4,9 +4,10 @@
 ## Quick Start
 ```bash
 $ sh build.sh
-$ ./nanomux
+$ ./nanomux tests/bc_test.csv tests/test.fastq 600 2000 200 1 OUTPUT
 ```
-
+## Help
+Just run `./nanomux` to get the help message:
 ```bash
 usage:
    ./nanomux <barcode_file: path> <fastq_file: path>
@@ -14,6 +15,8 @@ usage:
    <barcode_pos: int> <k: int>
    <output folder: path>
 ```
+* barcode_pos: where to search for the barcode in the ends. 
+* k: allowed number of mismatches
 
 ### Usage
 `barcode_file.csv` **MUST** have the follwing shape:
