@@ -18,7 +18,7 @@ usage:
 * barcode_pos: where to search for the barcode in the ends. 
 * k: allowed number of mismatches
 
-### Usage
+## Usage
 `barcode_file.csv` **MUST** have the follwing shape:
 ```csv
 #name,forward_bc,reverse_bc
@@ -26,6 +26,10 @@ bc1,ATACGATGCTA,GTCGATGTCTGA
 b2,GACACACAC,GTCGATTGATG
 ...
 ```
+
+## TODO
+* trim barcodes
+* read splitting
 
 
 
