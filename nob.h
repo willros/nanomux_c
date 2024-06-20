@@ -384,7 +384,8 @@ bool nob_mkdir_if_not_exists(const char *path)
     if (result < 0) {
         if (errno == EEXIST) {
             nob_log(NOB_INFO, "directory `%s` already exists", path);
-            return true;
+            // change this from true, i want the program to crash if the folder exists
+            return false;
         }
         nob_log(NOB_ERROR, "could not create directory `%s`: %s", path, strerror(errno));
         return false;

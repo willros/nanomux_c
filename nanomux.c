@@ -5,6 +5,7 @@
 #include <limits.h> 
 
 
+// inspired by flexplex: https://github.com/DavidsonGroup/flexiplex
 uint8_t* edit_distance(const uint8_t *string, size_t stringlen, const uint8_t *pat, size_t patlen, int k) {
     size_t len1 = stringlen + 1;
     size_t len2 = patlen + 1;
@@ -155,7 +156,7 @@ void complement_sequence(const uint8_t *seq, uint8_t *comp_seq, size_t length) {
 void compute_reverse_complement_rv(Barcode *barcode) {
     uint8_t *comp_seq = malloc((barcode->rv_length + 1) * sizeof(uint8_t));
     if (comp_seq == NULL) {
-        fprintf(stderr, "Error: Memory allocation failed for reverse complement sequence.\n");
+        nob_log(NOB_ERROR, "Memory allocation failed for reverse complement, exiting");
         exit(1); 
     }
 
@@ -166,7 +167,7 @@ void compute_reverse_complement_rv(Barcode *barcode) {
 void compute_reverse_complement_fw(Barcode *barcode) {
     uint8_t *comp_seq = malloc((barcode->fw_length + 1) * sizeof(uint8_t));
     if (comp_seq == NULL) {
-        fprintf(stderr, "Error: Memory allocation failed for reverse complement sequence.\n");
+        nob_log(NOB_ERROR, "Memory allocation failed for reverse complement, exiting");
         exit(1); 
     }
 
@@ -209,11 +210,6 @@ Barcodes parse_barcodes(Nob_String_View content) {
 }
 
 
-void reverse_complement_barcode_rv(Barcode *barcode, uint8_t *comp_seq) {
-    complement_sequence(barcode->rv, comp_seq, barcode->rv_length);
-}
-
-
 void substring(const uint8_t *source, size_t start, size_t length, uint8_t *dest) {
     memcpy(dest, source + start, length);
     dest[length] = '\0';
@@ -245,11 +241,13 @@ int main(int argc, char **argv) {
     const char *output = nob_shift_args(&argc, &argv);
     nob_log(NOB_INFO, "Read len min: %i", read_len_min);
     nob_log(NOB_INFO, "Read len max: %i", read_len_max);
-    nob_log(NOB_INFO, "Barcode position: 0 - %zu", barcode_pos);
+    nob_log(NOB_INFO, "Barcode position: 0 -> %zu", barcode_pos);
     nob_log(NOB_INFO, "k: %i", k);
-    nob_log(NOB_INFO, "Output folder: %s", output);
 
-    if (!nob_mkdir_if_not_exists(output)) return 1;
+    if (!nob_mkdir_if_not_exists(output)) {
+        nob_log(NOB_ERROR, "exiting");
+        return 1;
+    }
    
     // create log file
     char log_file[256];
@@ -287,8 +285,8 @@ int main(int argc, char **argv) {
     
     nob_log(NOB_INFO, "Parsing fastq file %s", fastq_file);
     Reads reads = parse_fastq(fastq_file, read_len_min, read_len_max);
-    nob_log(NOB_INFO, "Number of reads: %zu", reads.count);
-    fprintf(LOG_FILE, "Number of reads: %zu\n", reads.count);
+    nob_log(NOB_INFO, "Number of reads after filtering: %zu", reads.count);
+    fprintf(LOG_FILE, "Number of reads after filtering: %zu\n", reads.count);
     printf("\n");
     
     fclose(LOG_FILE);
@@ -308,7 +306,7 @@ int main(int argc, char **argv) {
         
         gzFile new_fastq = gzopen(fastq_name, "ab");
         if (!new_fastq) {
-            nob_log(NOB_INFO, "Failed to open new fastq_file for appending");
+            nob_log(NOB_INFO, "Failed to open new fastq_file for appending, exiting");
             return 1;
         }
         
@@ -325,6 +323,7 @@ int main(int argc, char **argv) {
                 uint8_t *match_last_fw = edit_distance(last_part, barcode_pos, b.rv_comp, b.rv_length, k);
                 if (match_last_fw != NULL) {
                     counter ++;
+                    // TODO: trim the read
                     append_read_to_gzip_fastq(new_fastq, &r);
                     continue;
                 }
@@ -335,6 +334,7 @@ int main(int argc, char **argv) {
                 uint8_t *match_last_rv = edit_distance(last_part, barcode_pos, b.fw_comp, b.fw_length, k);
                 if (match_last_rv != NULL) {
                     counter ++;
+                    // TODO: trim the read
                     append_read_to_gzip_fastq(new_fastq, &r);
                 }
             }

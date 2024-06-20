@@ -1,5 +1,7 @@
 # nanomux_c
 
+Demultiplex your nanopore (or other) reads! Implements fuzzy matching useful for noisy reads. Written entirely in C, so should compile on most platforms.
+
 
 ## Quick Start
 ```bash
