@@ -5,70 +5,62 @@
 #include <limits.h> 
 
 
+
+
 // inspired by flexplex: https://github.com/DavidsonGroup/flexiplex
-uint8_t* edit_distance(const uint8_t *string, size_t stringlen, const uint8_t *pat, size_t patlen, int k) {
-    size_t len1 = stringlen + 1;
+int edit_distance(const uint8_t* text, size_t textlen, const uint8_t* pattern, size_t patlen, int k) {
+    size_t len1 = textlen + 1;
     size_t len2 = patlen + 1;
 
     unsigned int* dist_holder = (unsigned int*)malloc(len1 * len2 * sizeof(unsigned int));
-    if (!dist_holder) {
-        return NULL; 
-        nob_log(NOB_ERROR, "Buy more ram lol");
-        exit(1);
-    }
+    if (!dist_holder) return -1; 
 
-    dist_holder[0] = 0;
-    for (size_t j = 1; j < len2; ++j) {
-        dist_holder[j] = j;
-    }
-    for (size_t i = 1; i < len1; ++i) {
-        dist_holder[i * len2] = 0;
-    }
+    dist_holder[0] = 0; //[0][0]
+    for (unsigned int j = 1; j < len2; ++j) dist_holder[j] = j; //[0][j]
+    for (unsigned int i = 1; i < len1; ++i) dist_holder[i * len2] = 0; //[i][0]
 
-    int best = INT_MAX;
-    unsigned int end = 0;
+    int best = INT_MAX; 
+    unsigned int end = len1 - 1;
 
-    for (size_t j = 1; j < len2; ++j) {
-        int any_below_threshold = 0; // Flag used for early exit
-        for (size_t i = 1; i < len1; ++i) {
-            int sub = (string[i - 1] == pat[j - 1]) ? 0 : 1;
+    for (unsigned int j = 1; j < len2; ++j) {
+        int any_below_threshold = 0; 
+        for (unsigned int i = 1; i < len1; ++i) {
+            int sub = (text[i - 1] == pattern[j - 1]) ? 0 : 1; 
 
             if (sub == 0) {
                 dist_holder[i * len2 + j] = dist_holder[(i - 1) * len2 + (j - 1)];
             } else {
-                dist_holder[i * len2 + j] = dist_holder[(i - 1) * len2 + j] + 1;
-                if (dist_holder[i * len2 + j] > dist_holder[i * len2 + (j - 1)] + 1) {
+                dist_holder[i * len2 + j] = dist_holder[(i - 1) * len2 + j] + 1; // [i-1][j]
+                if (dist_holder[i * len2 + j] > dist_holder[i * len2 + (j - 1)] + 1) // [i][j-1]
                     dist_holder[i * len2 + j] = dist_holder[i * len2 + (j - 1)] + 1;
-                }
-                if (dist_holder[i * len2 + j] > dist_holder[(i - 1) * len2 + (j - 1)] + 1) {
+                if (dist_holder[i * len2 + j] > dist_holder[(i - 1) * len2 + (j - 1)] + 1) // [i-1][j-1]
                     dist_holder[i * len2 + j] = dist_holder[(i - 1) * len2 + (j - 1)] + 1;
-                }
             }
-
             if (dist_holder[i * len2 + j] <= k) {
                 any_below_threshold = 1;
             }
 
-            if (j == (len2 - 1) && dist_holder[i * len2 + j] <= k && dist_holder[i * len2 + j] < best) {
+            if (j == (len2 - 1) && dist_holder[i * len2 + j] < best) {
                 best = dist_holder[i * len2 + j];
-                end = i;
+                end = i; // Update the end position of alignment
+                if (best <= k) {
+                    free(dist_holder);
+                    return end; 
+                }
             }
         }
 
         if (!any_below_threshold) {
             free(dist_holder);
-            return NULL; 
+            return -1; 
         }
     }
 
     free(dist_holder);
-
-    if (best <= k) {
-        return (uint8_t*)(string + end - 1); // Return the end position of alignment
-    } else {
-        return NULL;
-    }
+    return -1; 
 }
+
+
 
 typedef enum {
     BARCODE_NAME = 0,
@@ -113,6 +105,11 @@ KSEQ_INIT(gzFile, gzread)
 Reads parse_fastq(const char *fastq_file_path, int read_len_min, int read_len_max) {
     
     gzFile fp = gzopen(fastq_file_path, "r"); 
+    if (!fp) {
+        nob_log(NOB_INFO, "Failed to open fastq file, exiting");
+        exit(1);
+    }
+    
     kseq_t *seq = kseq_init(fp); 
     int l;
     Reads reads = {0};
@@ -216,6 +213,18 @@ void substring(const uint8_t *source, size_t start, size_t length, uint8_t *dest
 }
 
 
+
+void append_read_to_gzip_fastq_trim(gzFile gzfp, Read *read, int start, int end) {
+    if (start < 0) start = 0;
+    if (end > (int)read->length) end = read->length;
+    size_t trimmed_length = end - start;
+    gzprintf(gzfp, "@%s\n", read->name);
+    gzprintf(gzfp, "%.*s\n", (int)trimmed_length, read->seq + start);
+    gzprintf(gzfp, "+\n");
+    gzprintf(gzfp, "%.*s\n", (int)trimmed_length, read->qual + start);
+}
+
+
 void append_read_to_gzip_fastq(gzFile gzfp, Read *read) {
     gzprintf(gzfp, "@%s\n", read->name);
     gzprintf(gzfp, "%s\n", read->seq);
@@ -311,31 +320,39 @@ int main(int argc, char **argv) {
         }
         
         for (size_t j = 0; j < reads.count; ++j) {
+            int match_first_fw = -1;
+            int match_last_fw = -1;
+            int match_first_rv = -1;
+            int match_last_rv = -1;
             
             Read r = reads.items[j];
             substring(r.seq, 0, barcode_pos, first_part); 
             size_t last_part_start = r.length - barcode_pos;
             substring(r.seq, last_part_start, barcode_pos, last_part); 
             
-            uint8_t *match_first_fw = edit_distance(first_part, barcode_pos, b.fw, b.fw_length, k);
+            match_first_fw = edit_distance(first_part, barcode_pos, b.fw, b.fw_length, k);
             
-            if (match_first_fw != NULL) {
-                uint8_t *match_last_fw = edit_distance(last_part, barcode_pos, b.rv_comp, b.rv_length, k);
-                if (match_last_fw != NULL) {
+            // fw ------ revcomp(rv)
+            if (match_first_fw != -1) {
+                match_last_fw = edit_distance(last_part, barcode_pos, b.rv_comp, b.rv_length, k);
+                if (match_last_fw != -1) {
                     counter ++;
                     // TODO: trim the read
-                    append_read_to_gzip_fastq(new_fastq, &r);
+                    append_read_to_gzip_fastq_trim(new_fastq, &r, 5, 20);
+                    //append_read_to_gzip_fastq(new_fastq, &r);
                     continue;
                 }
             }
             
-            uint8_t *match_first_rv = edit_distance(first_part, barcode_pos, b.rv, b.rv_length, k);
-            if (match_first_rv != NULL) {
-                uint8_t *match_last_rv = edit_distance(last_part, barcode_pos, b.fw_comp, b.fw_length, k);
-                if (match_last_rv != NULL) {
+            // rv ------ revcomp(fw)
+            match_first_rv = edit_distance(first_part, barcode_pos, b.rv, b.rv_length, k);
+            if (match_first_rv != -1) {
+                match_last_rv = edit_distance(last_part, barcode_pos, b.fw_comp, b.fw_length, k);
+                if (match_last_rv != -1) {
                     counter ++;
                     // TODO: trim the read
-                    append_read_to_gzip_fastq(new_fastq, &r);
+                    append_read_to_gzip_fastq_trim(new_fastq, &r, 5, 20);
+                    //append_read_to_gzip_fastq(new_fastq, &r);
                 }
             }
         }
