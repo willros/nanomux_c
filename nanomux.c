@@ -4,9 +4,6 @@
 #include "kseq.h"
 #include <limits.h> 
 
-
-
-
 // inspired by flexplex: https://github.com/DavidsonGroup/flexiplex
 int edit_distance(const uint8_t* text, size_t textlen, const uint8_t* pattern, size_t patlen, int k) {
     size_t len1 = textlen + 1;
@@ -60,14 +57,11 @@ int edit_distance(const uint8_t* text, size_t textlen, const uint8_t* pattern, s
     return -1; 
 }
 
-
-
 typedef enum {
     BARCODE_NAME = 0,
     BARCODE_FW,
     BARCODE_RV
 } Barcode_Attr;
-
 
 typedef struct {
     Nob_String_View name;
@@ -79,13 +73,11 @@ typedef struct {
     const uint8_t *fw_comp;  
 } Barcode;
 
-
 typedef struct {
     Barcode *items;
     size_t count;
     size_t capacity;
 } Barcodes;
-
 
 typedef struct {
     const uint8_t *seq;
@@ -99,7 +91,6 @@ typedef struct {
     size_t count;
     size_t capacity;
 } Reads;
-
 
 KSEQ_INIT(gzFile, gzread)
 Reads parse_fastq(const char *fastq_file_path, int read_len_min, int read_len_max) {
@@ -148,7 +139,6 @@ void complement_sequence(const uint8_t *seq, uint8_t *comp_seq, size_t length) {
     }
     comp_seq[length] = '\0';
 }
-
 
 void compute_reverse_complement_rv(Barcode *barcode) {
     uint8_t *comp_seq = malloc((barcode->rv_length + 1) * sizeof(uint8_t));
@@ -206,13 +196,10 @@ Barcodes parse_barcodes(Nob_String_View content) {
     return barcodes;
 }
 
-
 void substring(const uint8_t *source, size_t start, size_t length, uint8_t *dest) {
     memcpy(dest, source + start, length);
     dest[length] = '\0';
 }
-
-
 
 void append_read_to_gzip_fastq_trim(gzFile gzfp, Read *read, int start, int end) {
     if (start < 0) start = 0;
@@ -224,7 +211,6 @@ void append_read_to_gzip_fastq_trim(gzFile gzfp, Read *read, int start, int end)
     gzprintf(gzfp, "%.*s\n", (int)trimmed_length, read->qual + start);
 }
 
-
 void append_read_to_gzip_fastq(gzFile gzfp, Read *read) {
     gzprintf(gzfp, "@%s\n", read->name);
     gzprintf(gzfp, "%s\n", read->seq);
@@ -232,12 +218,11 @@ void append_read_to_gzip_fastq(gzFile gzfp, Read *read) {
     gzprintf(gzfp, "%s\n", read->qual);
 }
 
-
 int main(int argc, char **argv) {    
     
     const char *program = nob_shift_args(&argc, &argv);
-    if (argc < 7) {
-        nob_log(NOB_ERROR, "usage:\n   %s <barcode_file: path> <fastq_file: path>\n   <read_len_min: int> <read_len_max: int>\n   <barcode_pos: int> <k: int>\n   <output folder: path>", program);
+    if (argc < 8) {
+        nob_log(NOB_ERROR, "usage:\n   %s <barcode_file: path> <fastq_file: path>\n   <read_len_min: int> <read_len_max: int>\n   <barcode_pos: int> <k: int>\n   <output_folder: path>\n   <trim_option: trim|notrim>", program);
         return 1;
     }
     
@@ -248,10 +233,23 @@ int main(int argc, char **argv) {
     size_t barcode_pos = atoi(nob_shift_args(&argc, &argv));
     int k = atoi(nob_shift_args(&argc, &argv));
     const char *output = nob_shift_args(&argc, &argv);
+    const char *trim_option = nob_shift_args(&argc, &argv);
     nob_log(NOB_INFO, "Read len min: %i", read_len_min);
     nob_log(NOB_INFO, "Read len max: %i", read_len_max);
     nob_log(NOB_INFO, "Barcode position: 0 -> %zu", barcode_pos);
     nob_log(NOB_INFO, "k: %i", k);
+    nob_log(NOB_INFO, "Trim option: %s", trim_option);
+    
+    // handle trim otion
+    bool trim;
+    if (strcmp(trim_option, "trim") == 0) {
+        trim = true;
+    } else if (strcmp(trim_option, "notrim") == 0) {
+        trim = false;
+    } else {
+        nob_log(NOB_ERROR, "trim option must be `trim` or `notrim`");
+        return 1;
+    }
 
     if (!nob_mkdir_if_not_exists(output)) {
         nob_log(NOB_ERROR, "exiting");
@@ -331,15 +329,18 @@ int main(int argc, char **argv) {
             substring(r.seq, last_part_start, barcode_pos, last_part); 
             
             match_first_fw = edit_distance(first_part, barcode_pos, b.fw, b.fw_length, k);
-            
             // fw ------ revcomp(rv)
             if (match_first_fw != -1) {
                 match_last_fw = edit_distance(last_part, barcode_pos, b.rv_comp, b.rv_length, k);
                 if (match_last_fw != -1) {
                     counter ++;
-                    // TODO: trim the read
-                    append_read_to_gzip_fastq_trim(new_fastq, &r, 5, 20);
-                    //append_read_to_gzip_fastq(new_fastq, &r);
+                    int trim_right = last_part_start + match_last_fw - b.rv_length;
+                    // trimming or not
+                    if (trim) {
+                        append_read_to_gzip_fastq_trim(new_fastq, &r, match_first_fw, trim_right);
+                    } else {
+                        append_read_to_gzip_fastq(new_fastq, &r);
+                    }
                     continue;
                 }
             }
@@ -349,10 +350,14 @@ int main(int argc, char **argv) {
             if (match_first_rv != -1) {
                 match_last_rv = edit_distance(last_part, barcode_pos, b.fw_comp, b.fw_length, k);
                 if (match_last_rv != -1) {
+                    int trim_right = last_part_start + match_last_rv - b.fw_length;
                     counter ++;
-                    // TODO: trim the read
-                    append_read_to_gzip_fastq_trim(new_fastq, &r, 5, 20);
-                    //append_read_to_gzip_fastq(new_fastq, &r);
+                    // trimming or not
+                    if (trim) {
+                        append_read_to_gzip_fastq_trim(new_fastq, &r, match_first_rv, trim_right);
+                    } else {
+                        append_read_to_gzip_fastq(new_fastq, &r);
+                    }
                 }
             }
         }

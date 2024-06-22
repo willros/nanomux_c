@@ -17,7 +17,8 @@ usage:
    ./nanomux <barcode_file: path> <fastq_file: path>
    <read_len_min: int> <read_len_max: int>
    <barcode_pos: int> <k: int>
-   <output folder: path>
+   <output_folder: path>
+   <trim_option: trim|notrim>
 ```
 * barcode_pos: where to search for the barcode in the ends. if barcode_pos == 200 and the read length is 1000, the barcodes will be searched for from position 0 -> 200 and 800 -> 1000.
 * k: allowed number of mismatches
@@ -32,8 +33,8 @@ b2,GACACACAC,GTCGATTGATG
 ```
 
 ## TODO
-* trim barcodes
-* read splitting
+[x] trim barcodes
+[] read splitting
 
 
 
