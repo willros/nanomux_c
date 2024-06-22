@@ -25,16 +25,19 @@ usage:
 
 ## Usage
 `barcode_file.csv` **MUST** have the follwing shape:
+* columns:
+    * name
+    * forward barcode
+    * reverse barcorde
 ```csv
-#name,forward_bc,reverse_bc
 bc1,ATACGATGCTA,GTCGATGTCTGA
 b2,GACACACAC,GTCGATTGATG
 ...
 ```
 
 ## TODO
-[x] trim barcodes
-[] read splitting
+* [x] trim barcodes
+* [] read splitting
 
 
 
