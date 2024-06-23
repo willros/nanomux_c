@@ -8,7 +8,7 @@ Demultiplex your nanopore (or other) reads! Implements fuzzy matching useful for
 $ git clone https://github.com/willros/nanomux_c.git
 $ cd nanomux_c/
 $ sh build.sh
-$ ./nanomux tests/bc_test.csv tests/test.fastq 600 2000 200 1 OUTPUT
+$ ./nanomux tests/bc_test.csv tests/test.fastq 600 2000 200 1 TEST_NANOMUX trim 4
 ```
 ## Help
 Just run `./nanomux` to get the help message:
@@ -37,12 +37,12 @@ b2,GACACACAC,GTCGATTGATG
 ```
 
 ## Credit
-`nanomux_c` uses `kseq.h`, written by Heng Li, for fastq parsing, and `nob.h`, written by Mr. Tsoding (Alexey Kutepov), for overall useful functions!  
+`nanomux_c` uses `kseq.h`, written by Heng Li, for fastq parsing, and `nob.h`, written by @tsoding (Alexey Kutepov), for overall useful functions!  
 
 ## TODO
-* [x] trim barcodes
-* [x] multi threading
-* [] read splitting
+- [x] trim barcodes
+- [x] multi threading
+- [] read splitting
 
 
 
