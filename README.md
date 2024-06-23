@@ -13,12 +13,13 @@ $ ./nanomux tests/bc_test.csv tests/test.fastq 600 2000 200 1 OUTPUT
 ## Help
 Just run `./nanomux` to get the help message:
 ```bash
-usage:
+[ERROR] usage:
    ./nanomux <barcode_file: path> <fastq_file: path>
    <read_len_min: int> <read_len_max: int>
    <barcode_pos: int> <k: int>
    <output_folder: path>
    <trim_option: trim|notrim>
+   <num_threads: int>
 ```
 * barcode_pos: where to search for the barcode in the ends. if barcode_pos == 200 and the read length is 1000, the barcodes will be searched for from position 0 -> 200 and 800 -> 1000.
 * k: allowed number of mismatches

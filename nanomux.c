@@ -3,6 +3,8 @@
 #include <zlib.h>
 #include "kseq.h"
 #include <limits.h> 
+#include <pthread.h>
+
 
 // inspired by flexplex: https://github.com/DavidsonGroup/flexiplex
 int edit_distance(const uint8_t* text, size_t textlen, const uint8_t* pattern, size_t patlen, int k) {
@@ -91,6 +93,18 @@ typedef struct {
     size_t count;
     size_t capacity;
 } Reads;
+
+
+typedef struct {
+    Barcode barcode;
+    Reads reads;
+    const char *output;
+    size_t barcode_pos;
+    int k;
+    int trim;
+    FILE *S_FILE;
+    pthread_mutex_t *s_mutex;
+} ThreadData;
 
 KSEQ_INIT(gzFile, gzread)
 Reads parse_fastq(const char *fastq_file_path, int read_len_min, int read_len_max) {
@@ -218,17 +232,18 @@ void append_read_to_gzip_fastq(gzFile gzfp, Read *read) {
     gzprintf(gzfp, "%s\n", read->qual);
 }
 
-void process_single_barcode(
-    Barcode b,
-    Reads reads,
+
+void process_single_barcode_thread(
+    const Barcode b,
+    const Reads reads,
     const char *output,
-    size_t barcode_pos,
-    int k,
-    bool trim,
-    FILE *S_FILE
+    const size_t barcode_pos,
+    const int k,
+    const int trim,
+    FILE *S_FILE,
+    pthread_mutex_t *s_mutex
 ) {
     int counter = 0;
-    nob_log(NOB_INFO, "barcode: "SV_Fmt, SV_Arg(b.name));
     
     // Save fastq
     char fastq_name[256]; 
@@ -240,8 +255,8 @@ void process_single_barcode(
         return;
     }
     
-    static uint8_t first_part[1000];
-    static uint8_t last_part[1000];
+    uint8_t first_part[1000];
+    uint8_t last_part[1000];
     
     for (size_t j = 0; j < reads.count; ++j) {
         int match_first_fw = -1;
@@ -288,28 +303,41 @@ void process_single_barcode(
         }
     }
     
-    nob_log(NOB_INFO, "matches: %i", counter);
+    nob_log(NOB_INFO, "barcode: "SV_Fmt" matches: %i", SV_Arg(b.name), counter);
     
-    if (counter == 0) {
-        nob_log(NOB_INFO, "No reads were found");
-        printf("\n");
-        gzclose(new_fastq);
-    } else {
-        nob_log(NOB_INFO, "Saving fastq file: %s", fastq_name);
-        printf("\n");
-        gzclose(new_fastq);
-    }
+    gzclose(new_fastq);
     
-    // Write summary file
+    // Write summary file with mutex lock
+    pthread_mutex_lock(s_mutex);
     fprintf(S_FILE, "%.*s,%i\n", (int)b.name.count, b.name.data, counter);
+    pthread_mutex_unlock(s_mutex);
 }
+
+
+void *thread_function(void *arg) {
+    ThreadData *data = (ThreadData *)arg;
+    Reads local_reads = data->reads;
+    process_single_barcode_thread(
+        data->barcode, 
+        local_reads, 
+        data->output, 
+        data->barcode_pos,
+        data->k, 
+        data->trim,
+        data->S_FILE,
+        data->s_mutex
+    );
+    
+    return NULL;
+}
+
 
 
 int main(int argc, char **argv) {    
     
     const char *program = nob_shift_args(&argc, &argv);
-    if (argc < 8) {
-        nob_log(NOB_ERROR, "usage:\n   %s <barcode_file: path> <fastq_file: path>\n   <read_len_min: int> <read_len_max: int>\n   <barcode_pos: int> <k: int>\n   <output_folder: path>\n   <trim_option: trim|notrim>", program);
+    if (argc < 9) {
+        nob_log(NOB_ERROR, "usage:\n   %s <barcode_file: path> <fastq_file: path>\n   <read_len_min: int> <read_len_max: int>\n   <barcode_pos: int> <k: int>\n   <output_folder: path>\n   <trim_option: trim|notrim>\n   <num_threads: int>", program);
         return 1;
     }
     
@@ -321,11 +349,14 @@ int main(int argc, char **argv) {
     int k = atoi(nob_shift_args(&argc, &argv));
     const char *output = nob_shift_args(&argc, &argv);
     const char *trim_option = nob_shift_args(&argc, &argv);
+    int num_threads = atoi(nob_shift_args(&argc, &argv));
+    
     nob_log(NOB_INFO, "Read len min: %i", read_len_min);
     nob_log(NOB_INFO, "Read len max: %i", read_len_max);
     nob_log(NOB_INFO, "Barcode position: 0 -> %zu", barcode_pos);
     nob_log(NOB_INFO, "k: %i", k);
     nob_log(NOB_INFO, "Trim option: %s", trim_option);
+    nob_log(NOB_INFO, "threads: %i", num_threads);
     
     // handle trim otion
     bool trim;
@@ -385,88 +416,49 @@ int main(int argc, char **argv) {
     
     fclose(LOG_FILE);
     
-    uint8_t first_part[1000];
-    uint8_t last_part[1000];
-    
-    for (size_t i = 0; i < barcodes.count; ++i) {
-        
-        int counter = 0;
-        Barcode b = barcodes.items[i];
-        nob_log(NOB_INFO, "barcode: "SV_Fmt, SV_Arg(b.name));
-        
-        // save fastq
-        char fastq_name[256]; 
-        snprintf(fastq_name, sizeof(fastq_name), "%s/%.*s.fq.gz", output, (int)b.name.count, b.name.data);
-        
-        gzFile new_fastq = gzopen(fastq_name, "ab");
-        if (!new_fastq) {
-            nob_log(NOB_INFO, "Failed to open new fastq_file for appending, exiting");
-            return 1;
-        }
-        
-        for (size_t j = 0; j < reads.count; ++j) {
-            int match_first_fw = -1;
-            int match_last_fw = -1;
-            int match_first_rv = -1;
-            int match_last_rv = -1;
-            
-            Read r = reads.items[j];
-            substring(r.seq, 0, barcode_pos, first_part); 
-            size_t last_part_start = r.length - barcode_pos;
-            substring(r.seq, last_part_start, barcode_pos, last_part); 
-            
-            match_first_fw = edit_distance(first_part, barcode_pos, b.fw, b.fw_length, k);
-            // fw ------ revcomp(rv)
-            if (match_first_fw != -1) {
-                match_last_fw = edit_distance(last_part, barcode_pos, b.rv_comp, b.rv_length, k);
-                if (match_last_fw != -1) {
-                    counter ++;
-                    int trim_right = last_part_start + match_last_fw - b.rv_length;
-                    // trimming or not
-                    if (trim) {
-                        append_read_to_gzip_fastq_trim(new_fastq, &r, match_first_fw, trim_right);
-                    } else {
-                        append_read_to_gzip_fastq(new_fastq, &r);
-                    }
-                    continue;
-                }
-            }
-            
-            // rv ------ revcomp(fw)
-            match_first_rv = edit_distance(first_part, barcode_pos, b.rv, b.rv_length, k);
-            if (match_first_rv != -1) {
-                match_last_rv = edit_distance(last_part, barcode_pos, b.fw_comp, b.fw_length, k);
-                if (match_last_rv != -1) {
-                    int trim_right = last_part_start + match_last_rv - b.fw_length;
-                    counter ++;
-                    // trimming or not
-                    if (trim) {
-                        append_read_to_gzip_fastq_trim(new_fastq, &r, match_first_rv, trim_right);
-                    } else {
-                        append_read_to_gzip_fastq(new_fastq, &r);
-                    }
-                }
-            }
-        }
-        
-        nob_log(NOB_INFO, "matches: %i", counter);
-        
-        if (counter == 0) {
-            nob_log(NOB_INFO, "No reads were found");
-            printf("\n");
-            gzclose(new_fastq);
-        } else {
-            nob_log(NOB_INFO, "Saving fastq file: %s", fastq_name);
-            printf("\n");
-            gzclose(new_fastq);
-        }
-        // write summary file
-        fprintf(S_FILE, "%.*s,%i\n", (int)b.name.count, b.name.data, counter);
+    pthread_t threads[num_threads];
+    ThreadData *thread_data = malloc(sizeof(ThreadData) * barcodes.count);
+    if (thread_data == NULL) {
+        nob_log(NOB_ERROR, "Memory allocation failed for thread data");
+        return 1;
     }
-    
-    fclose(S_FILE);
-    nob_log(NOB_INFO, "Done!");
+
+    pthread_mutex_t barcode_index_mutex = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_t s_mutex = PTHREAD_MUTEX_INITIALIZER;
+    size_t next_barcode_index = 0;
+
+    while (next_barcode_index < barcodes.count) {
+        int i = 0;
+        for (; i < num_threads && next_barcode_index < barcodes.count; i++) {
+            pthread_mutex_lock(&barcode_index_mutex);
+            size_t current_barcode_index = next_barcode_index++;
+            pthread_mutex_unlock(&barcode_index_mutex);
+
+            thread_data[current_barcode_index] = (ThreadData){
+                .barcode = barcodes.items[current_barcode_index],
+                .reads = reads,
+                .output = output,
+                .barcode_pos = barcode_pos,
+                .k = k,
+                .trim = trim,
+                .S_FILE = S_FILE,
+                .s_mutex = &s_mutex
+            };
+            pthread_create(&threads[i], NULL, thread_function, &thread_data[current_barcode_index]);
+        }
+
+        for (int j = 0; j < i; j++) {
+            pthread_join(threads[j], NULL);
+        }
+    }
+
+    pthread_mutex_destroy(&barcode_index_mutex);
+    pthread_mutex_destroy(&s_mutex);
     nob_da_free(barcodes);
     nob_da_free(reads);
+    fclose(S_FILE);
+    
+    nob_log(NOB_INFO, "Done!");
+    
     return 0;
 }
