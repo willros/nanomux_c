@@ -102,8 +102,8 @@ typedef struct {
     size_t barcode_pos;
     int k;
     int trim;
-    //FILE *S_FILE;
-    //pthread_mutex_t *file_mutex;
+    FILE *S_FILE;
+    pthread_mutex_t *s_mutex;
 } ThreadData;
 
 KSEQ_INIT(gzFile, gzread)
@@ -239,9 +239,9 @@ void process_single_barcode_thread(
     const char *output,
     const size_t barcode_pos,
     const int k,
-    const int trim
-    //FILE *S_FILE,
-    //pthread_mutex_t *file_mutex
+    const int trim,
+    FILE *S_FILE,
+    pthread_mutex_t *s_mutex
 ) {
     int counter = 0;
     
@@ -305,20 +305,12 @@ void process_single_barcode_thread(
     
     nob_log(NOB_INFO, "barcode: "SV_Fmt" matches: %i", SV_Arg(b.name), counter);
     
-    if (counter == 0) {
-        //nob_log(NOB_INFO, "No reads were found");
-        //printf("\n");
-        gzclose(new_fastq);
-    } else {
-        //nob_log(NOB_INFO, "Saving fastq file: %s", fastq_name);
-        //printf("\n");
-        gzclose(new_fastq);
-    }
+    gzclose(new_fastq);
     
     // Write summary file with mutex lock
-    //pthread_mutex_lock(file_mutex);
-    //fprintf(S_FILE, "%.*s,%i\n", (int)b.name.count, b.name.data, counter);
-    //pthread_mutex_unlock(file_mutex);
+    pthread_mutex_lock(s_mutex);
+    fprintf(S_FILE, "%.*s,%i\n", (int)b.name.count, b.name.data, counter);
+    pthread_mutex_unlock(s_mutex);
 }
 
 
@@ -331,9 +323,9 @@ void *thread_function(void *arg) {
         data->output, 
         data->barcode_pos,
         data->k, 
-        data->trim
-        //data->S_FILE,
-        //data->file_mutex
+        data->trim,
+        data->S_FILE,
+        data->s_mutex
     );
     
     return NULL;
@@ -424,7 +416,6 @@ int main(int argc, char **argv) {
     
     fclose(LOG_FILE);
     
-    
     pthread_t threads[num_threads];
     ThreadData *thread_data = malloc(sizeof(ThreadData) * barcodes.count);
     if (thread_data == NULL) {
@@ -433,13 +424,12 @@ int main(int argc, char **argv) {
     }
 
     pthread_mutex_t barcode_index_mutex = PTHREAD_MUTEX_INITIALIZER;
-    //pthread_mutex_t summary_mutex = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_t s_mutex = PTHREAD_MUTEX_INITIALIZER;
     size_t next_barcode_index = 0;
 
-
     while (next_barcode_index < barcodes.count) {
-        int i;
-        for (i = 0; i < num_threads && next_barcode_index < barcodes.count; i++) {
+        int i = 0;
+        for (; i < num_threads && next_barcode_index < barcodes.count; i++) {
             pthread_mutex_lock(&barcode_index_mutex);
             size_t current_barcode_index = next_barcode_index++;
             pthread_mutex_unlock(&barcode_index_mutex);
@@ -450,9 +440,9 @@ int main(int argc, char **argv) {
                 .output = output,
                 .barcode_pos = barcode_pos,
                 .k = k,
-                .trim = trim
-                //.S_FILE = S_FILE,
-                //.summary_mutex = &summary_mutex
+                .trim = trim,
+                .S_FILE = S_FILE,
+                .s_mutex = &s_mutex
             };
             pthread_create(&threads[i], NULL, thread_function, &thread_data[current_barcode_index]);
         }
@@ -463,10 +453,12 @@ int main(int argc, char **argv) {
     }
 
     pthread_mutex_destroy(&barcode_index_mutex);
-    
-    fclose(S_FILE);
-    nob_log(NOB_INFO, "Done!");
+    pthread_mutex_destroy(&s_mutex);
     nob_da_free(barcodes);
     nob_da_free(reads);
+    fclose(S_FILE);
+    
+    nob_log(NOB_INFO, "Done!");
+    
     return 0;
 }

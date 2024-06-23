@@ -35,8 +35,12 @@ b2,GACACACAC,GTCGATTGATG
 ...
 ```
 
+## Credit
+`nanomux_c` uses `kseq.h`, written by Heng Li, for fastq parsing, and `nob.h`, written by Mr. Tsoding (Alexey Kutepov), for overall useful functions!  
+
 ## TODO
 * [x] trim barcodes
+* [x] multi threading
 * [] read splitting
 
 
