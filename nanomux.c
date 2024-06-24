@@ -3,6 +3,7 @@
 #include <zlib.h>
 #include "kseq.h"
 #include <limits.h> 
+#include <stdint.h>
 #include <pthread.h>
 
 
