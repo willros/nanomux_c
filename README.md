@@ -13,10 +13,14 @@ $ ./nanomux tests/bc_test.csv tests/test.fastq 600 2000 200 1 TEST_NANOMUX trim 
 ## Help
 Just run `./nanomux` to get the help message:
 ```bash
-[ERROR] usage:
-   ./nanomux <barcode_file: path> <fastq_file: path>
-   <read_len_min: int> <read_len_max: int>
-   <barcode_pos: int> <k: int>
+[USAGE] Add the following arguments in this exakt order:
+   ./nanomux
+   <barcode_file: path>
+   <fastq_file: path>
+   <read_len_min: int>
+   <read_len_max: int>
+   <barcode_pos: int>
+   <k: int>
    <output_folder: path>
    <trim_option: trim|notrim>
    <num_threads: int>

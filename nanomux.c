@@ -358,8 +358,9 @@ void *thread_function(void *arg) {
 int main(int argc, char **argv) {    
     
     const char *program = nob_shift_args(&argc, &argv);
-    if (argc < 9) {
-        nob_log(NOB_ERROR, "usage:\n   %s <barcode_file: path> <fastq_file: path>\n   <read_len_min: int> <read_len_max: int>\n   <barcode_pos: int> <k: int>\n   <output_folder: path>\n   <trim_option: trim|notrim>\n   <num_threads: int>", program);
+    
+    if (argc != 9) {
+        printf("[USAGE] Add the following arguments in this exakt order:\n   %s\n   <barcode_file: path>\n   <fastq_file: path>\n   <read_len_min: int>\n   <read_len_max: int>\n   <barcode_pos: int>\n   <k: int>\n   <output_folder: path>\n   <trim_option: trim|notrim>\n   <num_threads: int>\n", program);
         return 1;
     }
     
