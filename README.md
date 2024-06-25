@@ -25,15 +25,15 @@ Just run `./nanomux` to get the help message:
    <trim_option: trim|notrim>
    <num_threads: int>
 ```
-* barcode_pos: where to search for the barcode in the ends. if barcode_pos == 200 and the read length is 1000, the barcodes will be searched for from position 0 -> 200 and 800 -> 1000.
-* k: allowed number of mismatches
+* `barcode_pos`: where to search for the barcode in the ends. if barcode_pos == 200 and the read length is 1000, the barcodes will be searched for from position 0 -> 200 and 800 -> 1000.
+* `k`: allowed number of mismatches
 
 ## Usage
 `barcode_file.csv` **MUST** have the follwing shape:
 * columns:
     * name
     * forward barcode
-    * reverse barcorde
+    * reverse barcode
 ```csv
 bc1,ATACGATGCTA,GTCGATGTCTGA
 b2,GACACACAC,GTCGATTGATG
