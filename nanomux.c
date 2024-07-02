@@ -1,8 +1,3 @@
-//TODO: readsplitting
-// this seems to be the adapter: TACTTCGTTCAGTTACGTATTGCT
-// they also use just the first 14 bp: TACTTCGTTCAGTT
-// search for that, strstr()? and just split by that into two reads? 
-
 // Copyright 2024 William Rosenbaum <william.rosenbaum88@gmail.com>
 //
 // Permission is hereby granted, free of charge, to any person obtaining
