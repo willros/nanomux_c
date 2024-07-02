@@ -8,20 +8,16 @@ Demultiplex your nanopore (or other) reads! Implements fuzzy matching useful for
 $ git clone https://github.com/willros/nanomux_c.git
 $ cd nanomux_c/
 $ chmod +x build.sh
-
-# to build with read splitting enabled:
-$ ./build.sh read_split
-# to build with read splitting disabled:
 $ ./build.sh 
 
 # test nanomux
-$ ./nanomux tests/bc_test.csv tests/test.fastq 600 2000 200 1 TEST_NANOMUX trim 4
+$ ./nanomux tests/bc_test.csv tests/test.fastq 600 2000 200 1 TEST_NANOMUX trim split 4
 ```
 
 ## Help
 Just run `./nanomux` to get the help message:
 ```bash
-[USAGE] Add the following arguments in this exakt order:
+[USAGE] Add the following arguments in this exact order:
    ./nanomux
    <barcode_file: path>
    <fastq_file: path>
@@ -31,6 +27,7 @@ Just run `./nanomux` to get the help message:
    <k: int>
    <output_folder: path>
    <trim_option: trim|notrim>
+   <split_option: split|nosplit>
    <num_threads: int>
 ```
 * `barcode_pos`: where to search for the barcode in the ends. if barcode_pos == 200 and the read length is 1000, the barcodes will be searched for from position 0 -> 200 and 800 -> 1000.
@@ -54,7 +51,7 @@ b2,GACACACAC,GTCGATTGATG
 ## TODO
 - [x] trim barcodes
 - [x] multi threading
-- [] read splitting
+- [x] read splitting
 
 
 

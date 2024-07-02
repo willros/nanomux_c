@@ -143,46 +143,50 @@ typedef struct {
 
 
 // TODO: update the adapter len when changing the adapter
+// TODO: change the parameters of the adapter position and so on
 const uint8_t *ADAPTER = (const uint8_t*)"TACTTCGTTCAGTTACGTATTGCT";
 #define ADAPTER_LEN 24
 #define CONCATENATED_READ_LEN_MIN 2500
 #define CONCATENATED_READ_LEN_MAX 5000
-#define ADAPTER_POSITION 1400
+#define ADAPTER_POSITION 1200
 
-void split_reads_by_adapter(const Read *read, Reads *reads, int *counter) {
+void split_reads_by_adapter(const Read *read, Reads *reads, int *counter, int read_len_min, int read_len_max) {
 
-    int match = edit_distance(read->seq, read->length, ADAPTER, ADAPTER_LEN, 0); // k = 0
+    int match = edit_distance(read->seq, read->length, ADAPTER, ADAPTER_LEN, 1); // k = 1
     
     if (match > ADAPTER_POSITION) {  
         *counter += 1;
         // two loops, one for each new read
         for (int i = 1; i < 3; i++) {
-            char new_read_name[100];
-            sprintf(new_read_name, "%s_%i\n", read->name, i);
             
-            int start = (i == 1) ? 0 : match + ADAPTER_LEN;
+            int start = (i == 1) ? 0 : match;
             int end = (i == 1) ? match : read->length;
             int new_length = end - start;
             
-            char new_read_seq[3500];
-            snprintf(new_read_seq, sizeof(new_read_seq), "%.*s", (int)new_length, read->seq + start);
-            
-            char new_read_qual[3500];
-            snprintf(new_read_qual, sizeof(new_read_qual), "%.*s", (int)new_length, read->qual + start);
-            
-            // add everything to the da Reads
-            Read new_read = {0};
-            new_read.seq = (const uint8_t *)strdup(new_read_seq);
-            new_read.name = strdup(new_read_name);
-            new_read.qual = strdup(new_read_qual);
-            new_read.length = new_length;
-            nob_da_append(reads, new_read);
+            if (new_length >= read_len_min && new_length <= read_len_max) {
+                char new_read_name[100];
+                sprintf(new_read_name, "%s_%i", read->name, i);
+
+                char new_read_seq[3500];
+                snprintf(new_read_seq, sizeof(new_read_seq), "%.*s", (int)new_length, read->seq + start);
+
+                char new_read_qual[3500];
+                snprintf(new_read_qual, sizeof(new_read_qual), "%.*s", (int)new_length, read->qual + start);
+
+                // add everything to the da Reads
+                Read new_read = {0};
+                new_read.seq = (const uint8_t *)strdup(new_read_seq);
+                new_read.name = strdup(new_read_name);
+                new_read.qual = strdup(new_read_qual);
+                new_read.length = new_length;
+                nob_da_append(reads, new_read);
+            }
         }
     }
 }
 
 KSEQ_INIT(gzFile, gzread)
-Reads parse_fastq(const char *fastq_file_path, int read_len_min, int read_len_max) {
+Reads parse_fastq(const char *fastq_file_path, int read_len_min, int read_len_max, bool split_reads) {
     
     gzFile fp = gzopen(fastq_file_path, "r"); 
     if (!fp) {
@@ -199,19 +203,19 @@ Reads parse_fastq(const char *fastq_file_path, int read_len_min, int read_len_ma
     while ((l = kseq_read(seq)) >= 0) { 
         int length = strlen(seq->seq.s);
         
-#ifdef READ_SPLITTING
-        if (length >= CONCATENATED_READ_LEN_MIN && length <= CONCATENATED_READ_LEN_MAX) {
-            Read concated_read = {0};
-            concated_read.seq = (const uint8_t *)strdup(seq->seq.s);
-            concated_read.name = strdup(seq->name.s);
-            concated_read.qual = strdup(seq->qual.s);
-            concated_read.length = length;
-            
-            split_reads_by_adapter(&concated_read, &reads, &counter);
-            free_read(&concated_read);
-            continue;
+        if (split_reads) {
+            if (length >= CONCATENATED_READ_LEN_MIN && length <= CONCATENATED_READ_LEN_MAX) {
+                Read concated_read = {0};
+                concated_read.seq = (const uint8_t *)strdup(seq->seq.s);
+                concated_read.name = strdup(seq->name.s);
+                concated_read.qual = strdup(seq->qual.s);
+                concated_read.length = length;
+
+                split_reads_by_adapter(&concated_read, &reads, &counter, read_len_min, read_len_max);
+                free_read(&concated_read);
+                continue;
+            }
         }
-#endif
         
         if (length >= read_len_min && length <= read_len_max) {
             Read read = {0};
@@ -223,9 +227,7 @@ Reads parse_fastq(const char *fastq_file_path, int read_len_min, int read_len_ma
         }
     }
     
-#ifdef READ_SPLITTING
-    nob_log(NOB_INFO, "Number of splitted reads: %i", counter);
-#endif
+    if (split_reads) nob_log(NOB_INFO, "Number of splitted reads: %i", counter);
     
     kseq_destroy(seq); 
     gzclose(fp); 
@@ -327,7 +329,6 @@ void append_read_to_gzip_fastq(gzFile gzfp, Read *read) {
     gzprintf(gzfp, "%s\n", read->qual);
 }
 
-
 void process_single_barcode_thread(
     const Barcode b,
     const Reads reads,
@@ -350,6 +351,7 @@ void process_single_barcode_thread(
         return;
     }
     
+    // TODO: change this to read_len_max
     uint8_t first_part[1000];
     uint8_t last_part[1000];
     
@@ -432,8 +434,8 @@ int main(int argc, char **argv) {
     
     const char *program = nob_shift_args(&argc, &argv);
     
-    if (argc != 9) {
-        printf("[USAGE] Add the following arguments in this exakt order:\n   %s\n   <barcode_file: path>\n   <fastq_file: path>\n   <read_len_min: int>\n   <read_len_max: int>\n   <barcode_pos: int>\n   <k: int>\n   <output_folder: path>\n   <trim_option: trim|notrim>\n   <num_threads: int>\n", program);
+    if (argc != 10) {
+        printf("[USAGE] Add the following arguments in this exact order:\n   %s\n   <barcode_file: path>\n   <fastq_file: path>\n   <read_len_min: int>\n   <read_len_max: int>\n   <barcode_pos: int>\n   <k: int>\n   <output_folder: path>\n   <trim_option: trim|notrim>\n   <split_option: split|nosplit>\n   <num_threads: int>\n", program);
         return 1;
     }
     
@@ -445,6 +447,7 @@ int main(int argc, char **argv) {
     int k = atoi(nob_shift_args(&argc, &argv));
     const char *output = nob_shift_args(&argc, &argv);
     const char *trim_option = nob_shift_args(&argc, &argv);
+    const char *split_option = nob_shift_args(&argc, &argv);
     int num_threads = atoi(nob_shift_args(&argc, &argv));
     
     nob_log(NOB_INFO, "Read len min: %i", read_len_min);
@@ -453,15 +456,27 @@ int main(int argc, char **argv) {
     nob_log(NOB_INFO, "k: %i", k);
     nob_log(NOB_INFO, "Trim option: %s", trim_option);
     nob_log(NOB_INFO, "threads: %i", num_threads);
+    nob_log(NOB_INFO, "Split option: %s", split_option);
     
-    // handle trim otion
+    // handle trim option
     bool trim;
     if (strcmp(trim_option, "trim") == 0) {
         trim = true;
     } else if (strcmp(trim_option, "notrim") == 0) {
         trim = false;
     } else {
-        nob_log(NOB_ERROR, "trim option must be `trim` or `notrim`");
+        nob_log(NOB_ERROR, "Trim option must be `trim` or `notrim`");
+        return 1;
+    }
+    
+    // handle split option
+    bool split;
+    if (strcmp(split_option, "split") == 0) {
+        split = true;
+    } else if (strcmp(split_option, "nosplit") == 0) {
+        split = false;
+    } else {
+        nob_log(NOB_ERROR, "Split option must be `split` or `nosplit`");
         return 1;
     }
 
@@ -497,6 +512,8 @@ int main(int argc, char **argv) {
     fprintf(LOG_FILE, "Barcode position: %zu\n", barcode_pos);
     fprintf(LOG_FILE, "K: %i\n", k);
     fprintf(LOG_FILE, "Output folder: %s\n", output);
+    fprintf(LOG_FILE, "Trim option: %s\n", trim_option);
+    fprintf(LOG_FILE, "Split option: %s\n", split_option);
     
     nob_log(NOB_INFO, "Parsing barcode file %s", barcode_file);
     Nob_String_Builder sb = {0};
@@ -505,7 +522,7 @@ int main(int argc, char **argv) {
     Barcodes barcodes = parse_barcodes(content);
     
     nob_log(NOB_INFO, "Parsing fastq file %s", fastq_file);
-    Reads reads = parse_fastq(fastq_file, read_len_min, read_len_max);
+    Reads reads = parse_fastq(fastq_file, read_len_min, read_len_max, split);
     nob_log(NOB_INFO, "Number of reads after filtering: %zu", reads.count);
     fprintf(LOG_FILE, "Number of reads after filtering: %zu\n", reads.count);
     printf("\n");
