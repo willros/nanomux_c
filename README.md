@@ -7,9 +7,17 @@ Demultiplex your nanopore (or other) reads! Implements fuzzy matching useful for
 ```bash
 $ git clone https://github.com/willros/nanomux_c.git
 $ cd nanomux_c/
-$ sh build.sh
+$ chmod +x build.sh
+
+# to build with read splitting enabled:
+$ ./build.sh read_split
+# to build with read splitting disabled:
+$ ./build.sh 
+
+# test nanomux
 $ ./nanomux tests/bc_test.csv tests/test.fastq 600 2000 200 1 TEST_NANOMUX trim 4
 ```
+
 ## Help
 Just run `./nanomux` to get the help message:
 ```bash

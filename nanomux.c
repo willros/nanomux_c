@@ -1,3 +1,8 @@
+//TODO: readsplitting
+// this seems to be the adapter: TACTTCGTTCAGTTACGTATTGCT
+// they also use just the first 14 bp: TACTTCGTTCAGTT
+// search for that, strstr()? and just split by that into two reads? 
+
 // Copyright 2024 William Rosenbaum <william.rosenbaum88@gmail.com>
 //
 // Permission is hereby granted, free of charge, to any person obtaining
@@ -30,22 +35,22 @@
 
 // inspired by flexplex: https://github.com/DavidsonGroup/flexiplex
 int edit_distance(const uint8_t* text, size_t textlen, const uint8_t* pattern, size_t patlen, int k) {
-    size_t len1 = textlen + 1;
-    size_t len2 = patlen + 1;
+    int len1 = textlen + 1;
+    int len2 = patlen + 1;
 
-    unsigned int* dist_holder = (unsigned int*)malloc(len1 * len2 * sizeof(unsigned int));
+    int* dist_holder = (int*)malloc(len1 * len2 * sizeof(int));
     if (!dist_holder) return -1; 
 
     dist_holder[0] = 0; //[0][0]
-    for (unsigned int j = 1; j < len2; ++j) dist_holder[j] = j; //[0][j]
-    for (unsigned int i = 1; i < len1; ++i) dist_holder[i * len2] = 0; //[i][0]
+    for (int j = 1; j < len2; ++j) dist_holder[j] = j; //[0][j]
+    for (int i = 1; i < len1; ++i) dist_holder[i * len2] = 0; //[i][0]
 
     int best = INT_MAX; 
-    unsigned int end = len1 - 1;
+    int end = len1 - 1;
 
-    for (unsigned int j = 1; j < len2; ++j) {
+    for (int j = 1; j < len2; ++j) {
         int any_below_threshold = 0; 
-        for (unsigned int i = 1; i < len1; ++i) {
+        for (int i = 1; i < len1; ++i) {
             int sub = (text[i - 1] == pattern[j - 1]) ? 0 : 1; 
 
             if (sub == 0) {
@@ -107,8 +112,16 @@ typedef struct {
     const uint8_t *seq;
     const char *name;
     const char *qual;
-    size_t length;
+    int length;
 } Read;
+
+void free_read(Read *read) {
+    if (read) {
+        free((void*)read->seq); 
+        free((void*)read->qual); 
+        free((void*)read->name); 
+    }
+}
 
 typedef struct {
     Read *items;
@@ -128,6 +141,46 @@ typedef struct {
     pthread_mutex_t *s_mutex;
 } ThreadData;
 
+
+// TODO: update the adapter len when changing the adapter
+const uint8_t *ADAPTER = (const uint8_t*)"TACTTCGTTCAGTTACGTATTGCT";
+#define ADAPTER_LEN 24
+#define CONCATENATED_READ_LEN_MIN 2500
+#define CONCATENATED_READ_LEN_MAX 5000
+#define ADAPTER_POSITION 1400
+
+void split_reads_by_adapter(const Read *read, Reads *reads, int *counter) {
+
+    int match = edit_distance(read->seq, read->length, ADAPTER, ADAPTER_LEN, 0); // k = 0
+    
+    if (match > ADAPTER_POSITION) {  
+        *counter += 1;
+        // two loops, one for each new read
+        for (int i = 1; i < 3; i++) {
+            char new_read_name[100];
+            sprintf(new_read_name, "%s_%i\n", read->name, i);
+            
+            int start = (i == 1) ? 0 : match + ADAPTER_LEN;
+            int end = (i == 1) ? match : read->length;
+            int new_length = end - start;
+            
+            char new_read_seq[3500];
+            snprintf(new_read_seq, sizeof(new_read_seq), "%.*s", (int)new_length, read->seq + start);
+            
+            char new_read_qual[3500];
+            snprintf(new_read_qual, sizeof(new_read_qual), "%.*s", (int)new_length, read->qual + start);
+            
+            // add everything to the da Reads
+            Read new_read = {0};
+            new_read.seq = (const uint8_t *)strdup(new_read_seq);
+            new_read.name = strdup(new_read_name);
+            new_read.qual = strdup(new_read_qual);
+            new_read.length = new_length;
+            nob_da_append(reads, new_read);
+        }
+    }
+}
+
 KSEQ_INIT(gzFile, gzread)
 Reads parse_fastq(const char *fastq_file_path, int read_len_min, int read_len_max) {
     
@@ -141,8 +194,24 @@ Reads parse_fastq(const char *fastq_file_path, int read_len_min, int read_len_ma
     int l;
     Reads reads = {0};
     
+    int counter = 0;
+    
     while ((l = kseq_read(seq)) >= 0) { 
-        size_t length = strlen(seq->seq.s);
+        int length = strlen(seq->seq.s);
+        
+#ifdef READ_SPLITTING
+        if (length >= CONCATENATED_READ_LEN_MIN && length <= CONCATENATED_READ_LEN_MAX) {
+            Read concated_read = {0};
+            concated_read.seq = (const uint8_t *)strdup(seq->seq.s);
+            concated_read.name = strdup(seq->name.s);
+            concated_read.qual = strdup(seq->qual.s);
+            concated_read.length = length;
+            
+            split_reads_by_adapter(&concated_read, &reads, &counter);
+            free_read(&concated_read);
+            continue;
+        }
+#endif
         
         if (length >= read_len_min && length <= read_len_max) {
             Read read = {0};
@@ -153,6 +222,10 @@ Reads parse_fastq(const char *fastq_file_path, int read_len_min, int read_len_ma
             nob_da_append(&reads, read);
         }
     }
+    
+#ifdef READ_SPLITTING
+    nob_log(NOB_INFO, "Number of splitted reads: %i", counter);
+#endif
     
     kseq_destroy(seq); 
     gzclose(fp); 
@@ -411,7 +484,7 @@ int main(int argc, char **argv) {
     snprintf(summary_file, sizeof(summary_file), "%s/nanomux_matches.csv", output);
     FILE *S_FILE = fopen(summary_file, "ab");
     if (S_FILE == NULL) {
-        nob_log(NOB_ERROR, "Could create summary file");
+        nob_log(NOB_ERROR, "Could not create summary file");
         return 1;
     }
     fprintf(S_FILE, "barcode,matches\n");
