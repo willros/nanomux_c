@@ -14,6 +14,9 @@ $ ./build.sh
 $ ./nanomux tests/bc_test.csv tests/test.fastq 600 2000 200 1 TEST_NANOMUX trim split 4
 ```
 
+## Information
+The fastq parsing still runs in single threaded mode, hence it is quite slow. I will try do implement multithreading for this in the future.
+
 ## Help
 Just run `./nanomux` to get the help message:
 ```bash
@@ -32,6 +35,8 @@ Just run `./nanomux` to get the help message:
 ```
 * `barcode_pos`: where to search for the barcode in the ends. if barcode_pos == 200 and the read length is 1000, the barcodes will be searched for from position 0 -> 200 and 800 -> 1000.
 * `k`: allowed number of mismatches
+* `trim_option`: To trim the reads to the left and right of the found barcode.
+* `split_option`: Try to split reads longer than 2500 if an adapter sequence is found in the middle. One splitted read results in two new reads, with the suffix `_1` and `_2`.
 
 ## Usage
 `barcode_file.csv` **MUST** have the follwing shape:
@@ -52,6 +57,7 @@ b2,GACACACAC,GTCGATTGATG
 - [x] trim barcodes
 - [x] multi threading
 - [x] read splitting
+- [] multi threading for fastq parsing
 
 
 

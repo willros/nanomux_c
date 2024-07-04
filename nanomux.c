@@ -110,6 +110,7 @@ typedef struct {
     int length;
 } Read;
 
+
 void free_read(Read *read) {
     if (read) {
         free((void*)read->seq); 
