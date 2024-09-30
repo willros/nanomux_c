@@ -172,12 +172,9 @@ int main(int argc, char **argv) {
             nob_da_append(&fastq_files, fastq_file);
             break;
         }
-        case NOB_FILE_ERROR: return 1;
-        case NOB_FILE_SYMLINK: return 1;
-        case NOB_FILE_OTHER: return 1;
         default:
             nob_log(NOB_ERROR, "input: `%s` has an unknown type", input);
-            return 1;
+			return 1;
     }
 
 
