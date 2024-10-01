@@ -136,7 +136,13 @@ typedef struct {
     int trim;
     FILE *S_FILE;
     pthread_mutex_t *s_mutex;
-} ThreadData;
+} NanomuxData;
+
+typedef struct {
+    NanomuxData *items;
+    size_t count;
+    size_t capacity;
+} NanomuxDatas;
 
 
 // TODO: update the adapter len when changing the adapter
@@ -326,7 +332,7 @@ void append_read_to_gzip_fastq(gzFile gzfp, Read *read) {
     gzprintf(gzfp, "%s\n", read->qual);
 }
 
-void process_single_barcode_thread(
+void process_single_barcode(
     const Barcode b,
     const Reads reads,
     const char *output,
@@ -401,17 +407,16 @@ void process_single_barcode_thread(
     
     gzclose(new_fastq);
     
-    // Write summary file with mutex lock
     pthread_mutex_lock(s_mutex);
     fprintf(S_FILE, "%.*s,%i\n", (int)b.name.count, b.name.data, counter);
     pthread_mutex_unlock(s_mutex);
 }
 
 
-void *thread_function(void *arg) {
-    ThreadData *data = (ThreadData *)arg;
+void run_nanomux(void *arg) {
+    NanomuxData *data = (NanomuxData *)arg;
     Reads local_reads = data->reads;
-    process_single_barcode_thread(
+    process_single_barcode(
         data->barcode, 
         local_reads, 
         data->output, 
@@ -421,11 +426,7 @@ void *thread_function(void *arg) {
         data->S_FILE,
         data->s_mutex
     );
-    
-    return NULL;
 }
-
-
 
 bool must_be_digit(const char *arg) {
     for(; *arg != '\0'; arg++) {
@@ -552,6 +553,8 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    printf("\n");
+    nob_log(NOB_INFO, "Running nanomux");
     nob_log(NOB_INFO, "Read len min: %i", read_len_min);
     nob_log(NOB_INFO, "Read len max: %i", read_len_max);
     nob_log(NOB_INFO, "Barcode position: 0 -> %zu", barcode_pos);
@@ -559,6 +562,7 @@ int main(int argc, char **argv) {
     nob_log(NOB_INFO, "Trim option: %s", trim_option);
     nob_log(NOB_INFO, "threads: %i", num_threads);
     nob_log(NOB_INFO, "Split option: %s", split_option);
+    printf("\n");
 
     if (!nob_mkdir_if_not_exists(output)) {
         nob_log(NOB_ERROR, "exiting");
@@ -609,55 +613,40 @@ int main(int argc, char **argv) {
     printf("\n");
 
     nob_log(NOB_INFO, "Generating threadpool with %i threads", num_threads);
+    threadpool thpool = thpool_init(num_threads);
     
-    return 0;
-    
-    pthread_t threads[num_threads];
-    ThreadData *thread_data = malloc(sizeof(ThreadData) * barcodes.count);
-    if (thread_data == NULL) {
-        nob_log(NOB_ERROR, "Buy more RAM lol");
-        fclose(LOG_FILE);
-        fclose(S_FILE);
-        return 1;
-    }
-
-    pthread_mutex_t barcode_index_mutex = PTHREAD_MUTEX_INITIALIZER;
+    NanomuxDatas nanomux_datas = {0};
     pthread_mutex_t s_mutex = PTHREAD_MUTEX_INITIALIZER;
-    size_t next_barcode_index = 0;
-
-    while (next_barcode_index < barcodes.count) {
-        int i = 0;
-        for (; i < num_threads && next_barcode_index < barcodes.count; i++) {
-            pthread_mutex_lock(&barcode_index_mutex);
-            size_t current_barcode_index = next_barcode_index++;
-            pthread_mutex_unlock(&barcode_index_mutex);
-
-            thread_data[current_barcode_index] = (ThreadData){
-                .barcode = barcodes.items[current_barcode_index],
-                .reads = reads,
-                .output = output,
-                .barcode_pos = barcode_pos,
-                .k = k,
-                .trim = trim,
-                .S_FILE = S_FILE,
-                .s_mutex = &s_mutex
-            };
-            pthread_create(&threads[i], NULL, thread_function, &thread_data[current_barcode_index]);
-        }
-
-        for (int j = 0; j < i; j++) {
-            pthread_join(threads[j], NULL);
-        }
+    for (int i = 0; i < barcodes.count; i++) {
+        NanomuxData nanomux_data = {
+            .barcode = barcodes.items[i],
+            .reads = reads,
+            .output = output,
+            .barcode_pos = barcode_pos,
+            .k = k,
+            .trim = trim,
+            .S_FILE = S_FILE,
+            .s_mutex = &s_mutex
+        };
+        nob_da_append(&nanomux_datas, nanomux_data);
+    }
+    for (int i = 0; i < nanomux_datas.count; i++) {
+    	thpool_add_work(thpool, run_nanomux, (void *)&nanomux_datas.items[i]);
     }
 
-    pthread_mutex_destroy(&barcode_index_mutex);
+	thpool_wait(thpool);
+	thpool_destroy(thpool);
+
     pthread_mutex_destroy(&s_mutex);
+
     nob_da_free(barcodes);
     nob_da_free(reads);
+    nob_da_free(nanomux_datas);
 
     fclose(S_FILE);
     fclose(LOG_FILE);
     
+    printf("\n");
     nob_log(NOB_INFO, "Done!");
     
     return 0;
