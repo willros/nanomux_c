@@ -9,8 +9,6 @@
 #include <math.h>
 #include "thpool.h"
 
-#define N_THREADS 4
-
 typedef struct {
     int min_qual;
     int min_read_len;
@@ -100,23 +98,71 @@ bool is_fastq(const char *file) {
     return strstr(file, "fastq") || strstr(file, "fq");
 }
 
+bool must_be_digit(const char *arg) {
+    for(; *arg != '\0'; arg++) {
+        if (!isdigit(*arg)) return false;
+    }
+    return true;
+}
+
+char *usage = 
+"[USAGE]: trim -i <input> [options]\n"
+"   -i    <input>         Path of folder or file\n"
+"   -r    <read_length>   Minium length of read.    Default: 1\n"
+"   -q    <quality>       Minimum quality of read.  Default: 1\n"
+"   -t    <threads>       Number of threads to use. Default: 1\n";
+
 
 int main(int argc, char **argv) {
-    const char *program = nob_shift_args(&argc, &argv);
+    
+    // required args
+    bool i_arg = false;
+    char *input;
 
-    if (argc != 3) {
-        printf("[USAGE] Add the following arguments in this exact order:\n   %s <input> <read_len_min> <min_qual>\n", program);
+    // optional args
+    int r_arg = 1, q_arg = 1, t_arg = 1;
+    char c;
+    while ((c = getopt (argc, argv, "i:r:q:t:")) != -1) {
+        switch (c) {
+            case 'i':
+                i_arg = true;
+                input = optarg;
+                break;
+            case 'r':
+                if (!must_be_digit(optarg)) {
+                    nob_log(NOB_ERROR, "-r must be digit");
+                    nob_log(NOB_ERROR, "%s", usage);
+                    return 1;
+                }
+                r_arg = atoi(optarg);
+                break;
+            case 'q':
+                if (!must_be_digit(optarg)) {
+                    nob_log(NOB_ERROR, "-q must be digit");
+                    nob_log(NOB_ERROR, "%s", usage);
+                    return 1;
+                }
+                q_arg = atoi(optarg);
+                break;
+            case 't':
+                if (!must_be_digit(optarg)) {
+                    nob_log(NOB_ERROR, "-t must be digit");
+                    nob_log(NOB_ERROR, "%s", usage);
+                    return 1;
+                }
+                t_arg = atoi(optarg);
+                break;
+        }
+    }
+    if (!i_arg) {
+        nob_log(NOB_ERROR, "%s", usage);
         return 1;
     }
-
-    const char *input = nob_shift_args(&argc, &argv);
-    int read_len_min = atoi(nob_shift_args(&argc, &argv));
-    int min_qual = atoi(nob_shift_args(&argc, &argv));
-
-
-    nob_log(NOB_INFO, "input: %s", input);
-    nob_log(NOB_INFO, "Read len min: %i", read_len_min);
-    nob_log(NOB_INFO, "Minimum quality: %i", min_qual);
+    
+    nob_log(NOB_INFO, "Input:               %20s", input);
+    nob_log(NOB_INFO, "Minimum read length: %20i", r_arg);
+    nob_log(NOB_INFO, "Minimum quality:     %20i", q_arg);
+    nob_log(NOB_INFO, "Number of threads:   %20i", t_arg);
 
     Nob_File_Type type = nob_get_file_type(input);
     Nob_File_Paths files = {0};
@@ -145,8 +191,8 @@ int main(int argc, char **argv) {
                 snprintf(outfile, sizeof(outfile), "%s/%s.filtered", input, file);
 
                 File fastq_file = {
-                    .min_qual = min_qual,
-                    .min_read_len = read_len_min,
+                    .min_qual = q_arg,
+                    .min_read_len = r_arg,
                     .in_file = strdup(realpath),
                     .out_file = strdup(outfile),
                 };
@@ -164,8 +210,8 @@ int main(int argc, char **argv) {
             snprintf(outfile, sizeof(outfile), "%s.filtered", input);
 
             File fastq_file = {
-                .min_qual = min_qual,
-                .min_read_len = read_len_min,
+                .min_qual = q_arg,
+                .min_read_len = r_arg,
                 .in_file = strdup(input),
                 .out_file = strdup(outfile),
             };
@@ -178,8 +224,8 @@ int main(int argc, char **argv) {
     }
 
 
-    nob_log(NOB_INFO, "Generating threadpool with %i threads", N_THREADS);
-    threadpool thpool = thpool_init(N_THREADS);
+    nob_log(NOB_INFO, "Generating threadpool with %i threads", t_arg);
+    threadpool thpool = thpool_init(t_arg);
 
     for (int i = 0; i < fastq_files.count; i++) {
 		thpool_add_work(thpool, task_parse_fastq_file, (void *)&fastq_files.items[i]);
