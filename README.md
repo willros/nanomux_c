@@ -46,18 +46,19 @@ Just run `./nanomux` to get the help message:
     * reverse barcode
 ```csv
 bc1,ATACGATGCTA,GTCGATGTCTGA
-b2,GACACACAC,GTCGATTGATG
+bc2,GACACACAC,GTCGATTGATG
 ...
 ```
 
 ## Credit
 `nanomux_c` uses `kseq.h` for fastq parsing, and `nob.h`, written by @tsoding (Alexey Kutepov), for overall useful functions!  
+It also uses `thpool.h` by Johan Hanssen Seferidis.
 
 ## TODO
 - [x] trim barcodes
 - [x] multi threading
 - [x] read splitting
-- [] multi threading for fastq parsing
+- [] Change to threadpool in nanomux
 
 
 

@@ -26,6 +26,7 @@
 #include <limits.h> 
 #include <stdint.h>
 #include <pthread.h>
+#include "thpool.h"
 
 
 // inspired by flexplex: https://github.com/DavidsonGroup/flexiplex
@@ -426,26 +427,131 @@ void *thread_function(void *arg) {
 
 
 
+bool must_be_digit(const char *arg) {
+    for(; *arg != '\0'; arg++) {
+        if (!isdigit(*arg)) return false;
+    }
+    return true;
+}
+
+char *usage = 
+"[USAGE]: nanomux \n"
+"   -b <barcode>             Path to barcode file.\n"
+"   -f <fastq>               Path to fastq file.\n"   
+"   -r <read_len_min>        Minimum length of read.\n"
+"   -R <read_len_max>        Maximum length of read.\n"
+"   -p <barcode_position>    Position of barcode.\n"
+"   -k <mismatches>          Number of misatches allowed.\n"
+"   -o <output>              Name of output folder.\n"
+"   -t <trim_option>         Trim reads from adapters or not?                      [Options]: trim | notrim.\n"
+"   -s <split_option>        Split concatenated reads based on adapter occurance?. [Options]: split | nosplit.\n"
+"   -j <threads>             Number of threads to use.                             Default: 1\n";
+
 int main(int argc, char **argv) {    
     
-    const char *program = nob_shift_args(&argc, &argv);
+    // CLI arguments
+    char *barcode_file = NULL;
+    char *fastq_file = NULL;
+    int read_len_min = -1;
+    int read_len_max = -1;
+    size_t barcode_pos = 0;
+    int k = -1;
+    char *output = NULL;
+    char *trim_option = NULL;
+    char *split_option = NULL;
+    int num_threads = 1;
+
+    bool trim, split;
     
-    if (argc != 10) {
-        printf("[USAGE] Add the following arguments in this exact order:\n   %s\n   <barcode_file: path>\n   <fastq_file: path>\n   <read_len_min: int>\n   <read_len_max: int>\n   <barcode_pos: int>\n   <k: int>\n   <output_folder: path>\n   <trim_option: trim|notrim>\n   <split_option: split|nosplit>\n   <num_threads: int>\n", program);
+    // parse arguments
+    int c;
+    while ((c = getopt(argc, argv, "b:f:r:R:p:k:o:t:s:j:")) != -1) {
+        switch (c) {
+            case 'b':
+                barcode_file = optarg;
+                break;
+            case 'f':
+                fastq_file = optarg;
+                break;
+            case 'r':
+                if (!must_be_digit(optarg)) {
+                    nob_log(NOB_ERROR, "-r must be a digit");
+                    printf("%s", usage);
+                    return 1;
+                }
+                read_len_min = atoi(optarg);
+                break;
+            case 'R':
+                if (!must_be_digit(optarg)) {
+                    nob_log(NOB_ERROR, "-R must be a digit");
+                    printf("%s", usage);
+                    return 1;
+                }
+                read_len_max = atoi(optarg);
+                break;
+            case 'p':
+                if (!must_be_digit(optarg)) {
+                    nob_log(NOB_ERROR, "-p must be a digit");
+                    printf("%s", usage);
+                    return 1;
+                }
+                barcode_pos = (size_t)atoi(optarg);
+                break;
+            case 'k':
+                if (!must_be_digit(optarg)) {
+                    nob_log(NOB_ERROR, "-k must be a digit");
+                    printf("%s", usage);
+                    return 1;
+                }
+                k = atoi(optarg);
+                break;
+            case 'o':
+                output = optarg;
+                break;
+            case 't':
+                if (strcmp(optarg, "trim") == 0) {
+                    trim = true;
+                } else if (strcmp(optarg, "notrim") == 0) {
+                    trim = false;
+                } else {
+                    nob_log(NOB_ERROR, "-t must be either 'trim' or 'notrim'");
+                    printf("%s", usage);
+                    return 1;
+                }
+                trim_option = optarg;
+                break;
+            case 's':
+                if (strcmp(optarg, "split") == 0) {
+                    split = true;
+                } else if (strcmp(optarg, "nosplit") == 0) {
+                    split = false;
+                } else {
+                    nob_log(NOB_ERROR, "-s must be either 'split' or 'nosplit'");
+                    printf("%s", usage);
+                    return 1;
+                }
+                split_option = optarg;
+                break;
+            case 'j':
+                if (!must_be_digit(optarg)) {
+                    nob_log(NOB_ERROR, "-j must be a digit");
+                    printf("%s", usage);
+                    return 1;
+                }
+                num_threads = atoi(optarg);
+                break;
+            case '?':
+                return 1;
+        }
+    }
+
+    if (!barcode_file || !fastq_file || read_len_min == -1 || read_len_max == -1 || 
+        barcode_pos == 0 || k == -1 || !output || !trim_option || !split_option) {
+        nob_log(NOB_ERROR, "Error: Missing required arguments\n");
+        printf("%s", usage);
         return 1;
     }
-    
-    const char *barcode_file = nob_shift_args(&argc, &argv);
-    const char *fastq_file = nob_shift_args(&argc, &argv);
-    int read_len_min = atoi(nob_shift_args(&argc, &argv));
-    int read_len_max = atoi(nob_shift_args(&argc, &argv));
-    size_t barcode_pos = atoi(nob_shift_args(&argc, &argv));
-    int k = atoi(nob_shift_args(&argc, &argv));
-    const char *output = nob_shift_args(&argc, &argv);
-    const char *trim_option = nob_shift_args(&argc, &argv);
-    const char *split_option = nob_shift_args(&argc, &argv);
-    int num_threads = atoi(nob_shift_args(&argc, &argv));
-    
+
     nob_log(NOB_INFO, "Read len min: %i", read_len_min);
     nob_log(NOB_INFO, "Read len max: %i", read_len_max);
     nob_log(NOB_INFO, "Barcode position: 0 -> %zu", barcode_pos);
@@ -453,28 +559,6 @@ int main(int argc, char **argv) {
     nob_log(NOB_INFO, "Trim option: %s", trim_option);
     nob_log(NOB_INFO, "threads: %i", num_threads);
     nob_log(NOB_INFO, "Split option: %s", split_option);
-    
-    // handle trim option
-    bool trim;
-    if (strcmp(trim_option, "trim") == 0) {
-        trim = true;
-    } else if (strcmp(trim_option, "notrim") == 0) {
-        trim = false;
-    } else {
-        nob_log(NOB_ERROR, "Trim option must be `trim` or `notrim`");
-        return 1;
-    }
-    
-    // handle split option
-    bool split;
-    if (strcmp(split_option, "split") == 0) {
-        split = true;
-    } else if (strcmp(split_option, "nosplit") == 0) {
-        split = false;
-    } else {
-        nob_log(NOB_ERROR, "Split option must be `split` or `nosplit`");
-        return 1;
-    }
 
     if (!nob_mkdir_if_not_exists(output)) {
         nob_log(NOB_ERROR, "exiting");
@@ -496,6 +580,7 @@ int main(int argc, char **argv) {
     FILE *S_FILE = fopen(summary_file, "ab");
     if (S_FILE == NULL) {
         nob_log(NOB_ERROR, "Could not create summary file");
+        fclose(LOG_FILE);
         return 1;
     }
     fprintf(S_FILE, "barcode,matches\n");
@@ -522,13 +607,17 @@ int main(int argc, char **argv) {
     nob_log(NOB_INFO, "Number of reads after filtering: %zu", reads.count);
     fprintf(LOG_FILE, "Number of reads after filtering: %zu\n", reads.count);
     printf("\n");
+
+    nob_log(NOB_INFO, "Generating threadpool with %i threads", num_threads);
     
-    fclose(LOG_FILE);
+    return 0;
     
     pthread_t threads[num_threads];
     ThreadData *thread_data = malloc(sizeof(ThreadData) * barcodes.count);
     if (thread_data == NULL) {
-        nob_log(NOB_ERROR, "Memory allocation failed for thread data");
+        nob_log(NOB_ERROR, "Buy more RAM lol");
+        fclose(LOG_FILE);
+        fclose(S_FILE);
         return 1;
     }
 
@@ -565,7 +654,9 @@ int main(int argc, char **argv) {
     pthread_mutex_destroy(&s_mutex);
     nob_da_free(barcodes);
     nob_da_free(reads);
+
     fclose(S_FILE);
+    fclose(LOG_FILE);
     
     nob_log(NOB_INFO, "Done!");
     
