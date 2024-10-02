@@ -29,58 +29,53 @@
 #include "thpool.h"
 
 
-// inspired by flexplex: https://github.com/DavidsonGroup/flexiplex
-int edit_distance(const uint8_t* text, size_t textlen, const uint8_t* pattern, size_t patlen, int k) {
-    int len1 = textlen + 1;
-    int len2 = patlen + 1;
+int min(int a, int b, int c) {
+    int min = a;
+    if (b < min) {
+        min = b;
+    }
+    if (c < min) {
+        min = c;
+    }
+    return min;
+}
 
-    int* dist_holder = (int*)malloc(len1 * len2 * sizeof(int));
-    if (!dist_holder) return -1; 
+// https://stackoverflow.com/questions/8139958/algorithm-to-find-edit-distance-to-all-substrings
+int levenshtein_distance(const char *haystack, const char *needle, int k) {
+    int needle_len = strlen(needle);
+    int haystack_len = strlen(haystack);
 
-    dist_holder[0] = 0; //[0][0]
-    for (int j = 1; j < len2; ++j) dist_holder[j] = j; //[0][j]
-    for (int i = 1; i < len1; ++i) dist_holder[i * len2] = 0; //[i][0]
+    if (k < 0 || k > needle_len) {
+        return -1;  
+    }
 
-    int best = INT_MAX; 
-    int end = len1 - 1;
+    int dp[needle_len + 1][haystack_len + 1];
 
-    for (int j = 1; j < len2; ++j) {
-        int any_below_threshold = 0; 
-        for (int i = 1; i < len1; ++i) {
-            int sub = (text[i - 1] == pattern[j - 1]) ? 0 : 1; 
+    for (int j = 0; j <= haystack_len; j++) {
+        dp[0][j] = 0;
+    }
 
-            if (sub == 0) {
-                dist_holder[i * len2 + j] = dist_holder[(i - 1) * len2 + (j - 1)];
+    for (int i = 1; i <= needle_len; i++) {
+        dp[i][0] = i;
+        for (int j = 1; j <= haystack_len; j++) {
+            if (needle[i - 1] == haystack[j - 1]) {
+                dp[i][j] = dp[i - 1][j - 1];
             } else {
-                dist_holder[i * len2 + j] = dist_holder[(i - 1) * len2 + j] + 1; // [i-1][j]
-                if (dist_holder[i * len2 + j] > dist_holder[i * len2 + (j - 1)] + 1) // [i][j-1]
-                    dist_holder[i * len2 + j] = dist_holder[i * len2 + (j - 1)] + 1;
-                if (dist_holder[i * len2 + j] > dist_holder[(i - 1) * len2 + (j - 1)] + 1) // [i-1][j-1]
-                    dist_holder[i * len2 + j] = dist_holder[(i - 1) * len2 + (j - 1)] + 1;
+                dp[i][j] = 1 + min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
             }
-            if (dist_holder[i * len2 + j] <= k) {
-                any_below_threshold = 1;
-            }
-
-            if (j == (len2 - 1) && dist_holder[i * len2 + j] < best) {
-                best = dist_holder[i * len2 + j];
-                end = i; // Update the end position of alignment
-                if (best <= k) {
-                    free(dist_holder);
-                    return end; 
-                }
-            }
-        }
-
-        if (!any_below_threshold) {
-            free(dist_holder);
-            return -1; 
         }
     }
 
-    free(dist_holder);
-    return -1; 
+    int end_pos = -1;
+    for (int j = needle_len; j <= haystack_len; j++) {
+        if (dp[needle_len][j] <= k) {
+            return j;
+        }
+    }
+    return end_pos;
 }
+
+
 
 typedef enum {
     BARCODE_NAME = 0,
@@ -89,13 +84,13 @@ typedef enum {
 } Barcode_Attr;
 
 typedef struct {
-    Nob_String_View name;
-    const uint8_t *fw;
+    const char *name;
+    const char *fw;
     size_t fw_length;
-    const uint8_t *rv;
+    const char *rv;
     size_t rv_length;
-    const uint8_t *rv_comp;  
-    const uint8_t *fw_comp;  
+    const char *rv_comp;  
+    const char *fw_comp;  
 } Barcode;
 
 typedef struct {
@@ -105,7 +100,7 @@ typedef struct {
 } Barcodes;
 
 typedef struct {
-    const uint8_t *seq;
+    const char *seq;
     const char *name;
     const char *qual;
     int length;
@@ -147,7 +142,7 @@ typedef struct {
 
 // TODO: update the adapter len when changing the adapter
 // TODO: change the parameters of the adapter position and so on
-const uint8_t *ADAPTER = (const uint8_t*)"TACTTCGTTCAGTTACGTATTGCT";
+const char *ADAPTER = "TACTTCGTTCAGTTACGTATTGCT";
 #define ADAPTER_LEN 24
 #define CONCATENATED_READ_LEN_MIN 2500
 #define CONCATENATED_READ_LEN_MAX 5000
@@ -155,7 +150,7 @@ const uint8_t *ADAPTER = (const uint8_t*)"TACTTCGTTCAGTTACGTATTGCT";
 
 void split_reads_by_adapter(const Read *read, Reads *reads, int *counter, int read_len_min, int read_len_max) {
 
-    int match = edit_distance(read->seq, read->length, ADAPTER, ADAPTER_LEN, 1); // k = 1
+    int match = levenshtein_distance(read->seq, ADAPTER, 1); // k = 1
     
     if (match > ADAPTER_POSITION) {  
         *counter += 1;
@@ -178,7 +173,7 @@ void split_reads_by_adapter(const Read *read, Reads *reads, int *counter, int re
 
                 // add everything to the da Reads
                 Read new_read = {0};
-                new_read.seq = (const uint8_t *)strdup(new_read_seq);
+                new_read.seq = strdup(new_read_seq);
                 new_read.name = strdup(new_read_name);
                 new_read.qual = strdup(new_read_qual);
                 new_read.length = new_length;
@@ -209,7 +204,7 @@ Reads parse_fastq(const char *fastq_file_path, int read_len_min, int read_len_ma
         if (split_reads) {
             if (length >= CONCATENATED_READ_LEN_MIN && length <= CONCATENATED_READ_LEN_MAX) {
                 Read concated_read = {0};
-                concated_read.seq = (const uint8_t *)strdup(seq->seq.s);
+                concated_read.seq = strdup(seq->seq.s);
                 concated_read.name = strdup(seq->name.s);
                 concated_read.qual = strdup(seq->qual.s);
                 concated_read.length = length;
@@ -222,7 +217,7 @@ Reads parse_fastq(const char *fastq_file_path, int read_len_min, int read_len_ma
         
         if (length >= read_len_min && length <= read_len_max) {
             Read read = {0};
-            read.seq = (const uint8_t *)strdup(seq->seq.s);
+            read.seq = strdup(seq->seq.s);
             read.name = strdup(seq->name.s);
             read.qual = strdup(seq->qual.s);
             read.length = length;
@@ -237,7 +232,7 @@ Reads parse_fastq(const char *fastq_file_path, int read_len_min, int read_len_ma
     return reads;
 }
 
-uint8_t complement(uint8_t nucleotide) {
+char complement(char nucleotide) {
     switch (nucleotide) {
         case 'A': return 'T';
         case 'T': return 'A';
@@ -247,7 +242,7 @@ uint8_t complement(uint8_t nucleotide) {
     }
 }
 
-void complement_sequence(const uint8_t *seq, uint8_t *comp_seq, size_t length) {
+void complement_sequence(const char *seq, char *comp_seq, size_t length) {
     for (size_t i = 0; i < length; i++) {
         comp_seq[length - 1 - i] = complement(seq[i]);
     }
@@ -255,7 +250,7 @@ void complement_sequence(const uint8_t *seq, uint8_t *comp_seq, size_t length) {
 }
 
 void compute_reverse_complement_rv(Barcode *barcode) {
-    uint8_t *comp_seq = malloc((barcode->rv_length + 1) * sizeof(uint8_t));
+    char *comp_seq = malloc((barcode->rv_length + 1) * sizeof(char));
     if (comp_seq == NULL) {
         nob_log(NOB_ERROR, "Memory allocation failed for reverse complement, exiting");
         exit(1); 
@@ -266,7 +261,7 @@ void compute_reverse_complement_rv(Barcode *barcode) {
 }
 
 void compute_reverse_complement_fw(Barcode *barcode) {
-    uint8_t *comp_seq = malloc((barcode->fw_length + 1) * sizeof(uint8_t));
+    char *comp_seq = malloc((barcode->fw_length + 1) * sizeof(char));
     if (comp_seq == NULL) {
         nob_log(NOB_ERROR, "Memory allocation failed for reverse complement, exiting");
         exit(1); 
@@ -285,18 +280,17 @@ Barcodes parse_barcodes(Nob_String_View content) {
 
         for (int i = 0; line.count > 0; ++i) {
             Nob_String_View attr = nob_sv_chop_by_delim(&line, ',');
-
             switch (i) {
                 case BARCODE_NAME:
-                    barcode.name = attr;
+                    barcode.name = nob_temp_sv_to_cstr(attr);
                     break;
                 case BARCODE_FW:
-                    barcode.fw = (const uint8_t *)attr.data;
+                    barcode.fw = nob_temp_sv_to_cstr(attr);
                     barcode.fw_length = attr.count;
                     compute_reverse_complement_fw(&barcode); 
                     break;
                 case BARCODE_RV:
-                    barcode.rv = (const uint8_t *)attr.data;
+                    barcode.rv = nob_temp_sv_to_cstr(attr);
                     barcode.rv_length = attr.count;
                     compute_reverse_complement_rv(&barcode); 
                     break;
@@ -310,7 +304,7 @@ Barcodes parse_barcodes(Nob_String_View content) {
     return barcodes;
 }
 
-void substring(const uint8_t *source, size_t start, size_t length, uint8_t *dest) {
+void substring(const char *source, size_t start, size_t length, char *dest) {
     memcpy(dest, source + start, length);
     dest[length] = '\0';
 }
@@ -346,7 +340,7 @@ void process_single_barcode(
     
     // Save fastq
     char fastq_name[256]; 
-    snprintf(fastq_name, sizeof(fastq_name), "%s/%.*s.fq.gz", output, (int)b.name.count, b.name.data);
+    snprintf(fastq_name, sizeof(fastq_name), "%s/%s.fq.gz", output, b.name);
     
     gzFile new_fastq = gzopen(fastq_name, "ab");
     if (!new_fastq) {
@@ -355,24 +349,21 @@ void process_single_barcode(
     }
     
     // TODO: change this to read_len_max
-    uint8_t first_part[1000];
-    uint8_t last_part[1000];
+    char first_part[1000];
+    char last_part[1000];
     
     for (size_t j = 0; j < reads.count; ++j) {
-        int match_first_fw = -1;
-        int match_last_fw = -1;
-        int match_first_rv = -1;
-        int match_last_rv = -1;
         
         Read r = reads.items[j];
-        substring(r.seq, 0, barcode_pos, first_part); 
+        size_t first_part_start = 0;
+        substring(r.seq, first_part_start, barcode_pos, first_part); 
         size_t last_part_start = r.length - barcode_pos;
         substring(r.seq, last_part_start, barcode_pos, last_part); 
         
-        match_first_fw = edit_distance(first_part, barcode_pos, b.fw, b.fw_length, k);
+        int match_first_fw = levenshtein_distance(first_part, b.fw, k);
         // fw ------ revcomp(rv)
         if (match_first_fw != -1) {
-            match_last_fw = edit_distance(last_part, barcode_pos, b.rv_comp, b.rv_length, k);
+            int match_last_fw = levenshtein_distance(last_part, b.rv_comp, k);
             if (match_last_fw != -1) {
                 counter++;
                 int trim_right = last_part_start + match_last_fw - b.rv_length;
@@ -387,9 +378,9 @@ void process_single_barcode(
         }
         
         // rv ------ revcomp(fw)
-        match_first_rv = edit_distance(first_part, barcode_pos, b.rv, b.rv_length, k);
+        int match_first_rv = levenshtein_distance(first_part, b.rv, k);
         if (match_first_rv != -1) {
-            match_last_rv = edit_distance(last_part, barcode_pos, b.fw_comp, b.fw_length, k);
+            int match_last_rv = levenshtein_distance(last_part, b.fw_comp, k);
             if (match_last_rv != -1) {
                 int trim_right = last_part_start + match_last_rv - b.fw_length;
                 counter++;
@@ -403,12 +394,12 @@ void process_single_barcode(
         }
     }
     
-    nob_log(NOB_INFO, "barcode: "SV_Fmt" matches: %i", SV_Arg(b.name), counter);
+    nob_log(NOB_INFO, "barcode: %50s matches: %i", b.name, counter);
     
     gzclose(new_fastq);
     
     pthread_mutex_lock(s_mutex);
-    fprintf(S_FILE, "%.*s,%i\n", (int)b.name.count, b.name.data, counter);
+    fprintf(S_FILE, "%s,%i\n", b.name, counter);
     pthread_mutex_unlock(s_mutex);
 }
 
@@ -416,6 +407,7 @@ void process_single_barcode(
 void run_nanomux(void *arg) {
     NanomuxData *data = (NanomuxData *)arg;
     Reads local_reads = data->reads;
+
     process_single_barcode(
         data->barcode, 
         local_reads, 
@@ -613,6 +605,7 @@ int main(int argc, char **argv) {
     printf("\n");
 
     nob_log(NOB_INFO, "Generating threadpool with %i threads", num_threads);
+    printf("\n");
     threadpool thpool = thpool_init(num_threads);
     
     NanomuxDatas nanomux_datas = {0};
