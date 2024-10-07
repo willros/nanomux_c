@@ -12,6 +12,7 @@
 typedef struct {
     int min_qual;
     int min_read_len;
+    int max_read_len;
     char *in_file;
     char *out_file;
 } File; 
@@ -39,7 +40,7 @@ void append_read_to_gzip_fastq(gzFile gzfp, const char *name, const char *seq, c
 }
 
 KSEQ_INIT(gzFile, gzread)
-bool parse_fastq(const char *fastq_file_path, int read_len_min, int min_qual, const char *out_path) {
+bool parse_fastq(const char *fastq_file_path, int read_len_min, int read_len_max, int min_qual, const char *out_path) {
     bool result = true;
     gzFile fastq_file = gzopen(fastq_file_path, "r"); 
     if (!fastq_file) {
@@ -64,12 +65,14 @@ bool parse_fastq(const char *fastq_file_path, int read_len_min, int min_qual, co
     while (kseq_read(seq) >= 0) { 
         raw_reads++;
         int length = strlen(seq->seq.s);
-        double average = average_qual(seq->qual.s, length);
-        if (length >= read_len_min && average > min_qual) {
-            qualified_reads++;
-            append_read_to_gzip_fastq(
-                out_file, seq->name.s, seq->seq.s, seq->qual.s
-            );
+        if (length >= read_len_min && length <= read_len_max) {
+            double average = average_qual(seq->qual.s, length);
+            if (average >= min_qual) {
+                qualified_reads++;
+                append_read_to_gzip_fastq(
+                    out_file, seq->name.s, seq->seq.s, seq->qual.s
+                );
+            }
         }
     }
     nob_log(NOB_INFO, "%50s: %10i raw reads       <-> %10i saved reads", fastq_file_path, raw_reads, qualified_reads);
@@ -89,7 +92,7 @@ void task_parse_fastq_file(void *arg) {
         file->in_file
     );
 
-    if (!parse_fastq(file->in_file, file->min_read_len, file->min_qual, file->out_file)) {
+    if (!parse_fastq(file->in_file, file->min_read_len, file->max_read_len, file->min_qual, file->out_file)) {
         return;
     }
 }
@@ -107,10 +110,11 @@ bool must_be_digit(const char *arg) {
 
 char *usage = 
 "[USAGE]: trim -i <input> [options]\n"
-"   -i    <input>         Path of folder or file\n"
-"   -r    <read_length>   Minium length of read.    Default: 1\n"
-"   -q    <quality>       Minimum quality of read.  Default: 1\n"
-"   -t    <threads>       Number of threads to use. Default: 1\n";
+"   -i    <input>             Path of folder or file\n"
+"   -r    <read_length_min>   Minium length of read.    Default: 1\n"
+"   -R    <read_length_max>   Minium length of read.    Default: INT_MAX\n"
+"   -q    <quality>           Minimum quality of read.  Default: 1\n"
+"   -t    <threads>           Number of threads to use. Default: 1\n";
 
 
 int main(int argc, char **argv) {
@@ -120,9 +124,9 @@ int main(int argc, char **argv) {
     char *input;
 
     // optional args
-    int r_arg = 1, q_arg = 1, t_arg = 1;
+    int r_arg = 1, q_arg = 1, t_arg = 1, R_arg = INT32_MAX;
     char c;
-    while ((c = getopt (argc, argv, "i:r:q:t:")) != -1) {
+    while ((c = getopt (argc, argv, "i:r:R:q:t:")) != -1) {
         switch (c) {
             case 'i':
                 i_arg = true;
@@ -135,6 +139,14 @@ int main(int argc, char **argv) {
                     return 1;
                 }
                 r_arg = atoi(optarg);
+                break;
+            case 'R':
+                if (!must_be_digit(optarg)) {
+                    nob_log(NOB_ERROR, "-R must be digit");
+                    nob_log(NOB_ERROR, "%s", usage);
+                    return 1;
+                }
+                R_arg = atoi(optarg);
                 break;
             case 'q':
                 if (!must_be_digit(optarg)) {
@@ -161,6 +173,7 @@ int main(int argc, char **argv) {
     
     nob_log(NOB_INFO, "Input:               %20s", input);
     nob_log(NOB_INFO, "Minimum read length: %20i", r_arg);
+    nob_log(NOB_INFO, "Maximum read length: %20i", R_arg);
     nob_log(NOB_INFO, "Minimum quality:     %20i", q_arg);
     nob_log(NOB_INFO, "Number of threads:   %20i", t_arg);
 
@@ -193,6 +206,7 @@ int main(int argc, char **argv) {
                 File fastq_file = {
                     .min_qual = q_arg,
                     .min_read_len = r_arg,
+                    .max_read_len = R_arg,
                     .in_file = strdup(realpath),
                     .out_file = strdup(outfile),
                 };
@@ -212,6 +226,7 @@ int main(int argc, char **argv) {
             File fastq_file = {
                 .min_qual = q_arg,
                 .min_read_len = r_arg,
+                .max_read_len = R_arg,
                 .in_file = strdup(input),
                 .out_file = strdup(outfile),
             };
