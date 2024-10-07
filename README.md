@@ -54,10 +54,11 @@ bc2,GACACACAC,GTCGATTGATG
 Run `./trim` to get the help message:
 ```bash
 [USAGE]: trim -i <input> [options]
-   -i    <input>         Path of folder or file
-   -r    <read_length>   Minium length of read.    Default: 1
-   -q    <quality>       Minimum quality of read.  Default: 1
-   -t    <threads>       Number of threads to use. Default: 1
+   -i    <input>             Path of folder or file
+   -r    <read_length_min>   Minium length of read.    Default: 1
+   -R    <read_length_max>   Minium length of read.    Default: INT_MAX
+   -q    <quality>           Minimum quality of read.  Default: 1
+   -t    <threads>           Number of threads to use. Default: 1
 ```
 
 `trim` saves the trimmed reads to a gzipped file with the same name and in the same folder as the original, but with the suffix `.filtered`. 
