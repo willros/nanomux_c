@@ -64,7 +64,7 @@ Run `./nanotrim` to get the help message:
 `nanotrim` saves the trimmed reads to a gzipped file with the same name and in the same folder as the original, but with the suffix `.filtered`. The input can be a single file or an entire folder. **NB**: The input files *MUST* be gzipped.
 
 ## Credit
-`nanomux_c` uses `kseq.h` for fastq parsing, and `nob.h`, written by @tsoding (Alexey Kutepov), for overall useful functions!  
+`nanomux_c` uses `kseq.h` for fastq parsing, and `nob.h`, written by [@tsoding](https://www.github.com/tsoding), for overall useful functions!  
 It also uses `thpool.h` by Johan Hanssen Seferidis.
 
 ## TODO
