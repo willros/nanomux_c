@@ -15,6 +15,7 @@ typedef struct {
     int max_read_len;
     char *in_file;
     char *out_file;
+    pthread_mutex_t *print_mutex;
 } File; 
 
 typedef struct {
@@ -40,7 +41,14 @@ void append_read_to_gzip_fastq(gzFile gzfp, const char *name, const char *seq, c
 }
 
 KSEQ_INIT(gzFile, gzread)
-bool parse_fastq(const char *fastq_file_path, int read_len_min, int read_len_max, int min_qual, const char *out_path) {
+bool parse_fastq(
+    const char *fastq_file_path, 
+    int read_len_min, 
+    int read_len_max, 
+    int min_qual, 
+    const char *out_path,
+    pthread_mutex_t *print_mutex
+) {
     bool result = true;
     gzFile fastq_file = gzopen(fastq_file_path, "r"); 
     if (!fastq_file) {
@@ -75,7 +83,10 @@ bool parse_fastq(const char *fastq_file_path, int read_len_min, int read_len_max
             }
         }
     }
-    nob_log(NOB_INFO, "%50s: %10i raw reads       <-> %10i saved reads", fastq_file_path, raw_reads, qualified_reads);
+    
+    pthread_mutex_lock(print_mutex);
+    nob_log(NOB_INFO, "%50s:     %15i raw reads --> %15i saved reads", fastq_file_path, raw_reads, qualified_reads);
+    pthread_mutex_unlock(print_mutex);
 
 defer:
     if (seq) kseq_destroy(seq); 
@@ -86,13 +97,8 @@ defer:
 
 void task_parse_fastq_file(void *arg) {
     File *file = (File *)arg;
-    printf(
-        "From task thread #%lu: parsing file: %s\n", 
-        (unsigned long)pthread_self(), 
-        file->in_file
-    );
 
-    if (!parse_fastq(file->in_file, file->min_read_len, file->max_read_len, file->min_qual, file->out_file)) {
+    if (!parse_fastq(file->in_file, file->min_read_len, file->max_read_len, file->min_qual, file->out_file, file->print_mutex)) {
         return;
     }
 }
@@ -180,6 +186,8 @@ int main(int argc, char **argv) {
     Nob_File_Type type = nob_get_file_type(input);
     Nob_File_Paths files = {0};
     Files fastq_files = {0};
+    
+    pthread_mutex_t print_mutex = PTHREAD_MUTEX_INITIALIZER;
 
     switch (type) {
         case NOB_FILE_DIRECTORY: {
@@ -209,6 +217,7 @@ int main(int argc, char **argv) {
                     .max_read_len = R_arg,
                     .in_file = strdup(realpath),
                     .out_file = strdup(outfile),
+                    .print_mutex = &print_mutex
                 };
                 nob_da_append(&fastq_files, fastq_file);
             }
@@ -248,6 +257,8 @@ int main(int argc, char **argv) {
 
 	thpool_wait(thpool);
 	thpool_destroy(thpool);
+    pthread_mutex_destroy(&print_mutex);
+
 
     nob_da_free(fastq_files);
     nob_da_free(files);

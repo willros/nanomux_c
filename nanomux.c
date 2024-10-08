@@ -393,12 +393,10 @@ void process_single_barcode(
             }
         }
     }
-    
-    nob_log(NOB_INFO, "barcode: %50s matches: %i", b.name, counter);
-    
     gzclose(new_fastq);
     
     pthread_mutex_lock(s_mutex);
+    nob_log(NOB_INFO, "barcode: %30s matches: %i", b.name, counter);
     fprintf(S_FILE, "%s,%i\n", b.name, counter);
     pthread_mutex_unlock(s_mutex);
 }
