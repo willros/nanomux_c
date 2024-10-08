@@ -228,6 +228,7 @@ int main(int argc, char **argv) {
                 nob_log(NOB_ERROR, "`%s` is not a fastq file...", input);
                 return 1;
             }
+            nob_log(NOB_INFO, "`%s` is a file", input);
 
             char outfile[512];
             snprintf(outfile, sizeof(outfile), "%s.filtered", input);
@@ -238,6 +239,7 @@ int main(int argc, char **argv) {
                 .max_read_len = R_arg,
                 .in_file = strdup(input),
                 .out_file = strdup(outfile),
+                .print_mutex = &print_mutex
             };
             nob_da_append(&fastq_files, fastq_file);
             break;
