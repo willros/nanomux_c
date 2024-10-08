@@ -2,7 +2,7 @@
 
 Demultiplex your nanopore (or other) reads! `nanomux` fuzzy matching useful for noisy reads. Written entirely in C, so should compile on most platforms. Depends on `pthreads`. 
 
-In the repo, you can also find `trim` – a small threaded program which you can use to filter out reads with a mean quality and mean length over your decided threshold.
+In the repo, you can also find `nanotrim` – a small threaded program which you can use to filter out reads with a mean quality and mean length over your decided threshold.
 
 ## Quick Start
 ```bash
@@ -14,8 +14,8 @@ $ ./build.sh
 # test nanomux
 $ ./nanomux -b tests/bc_test.csv -f tests/test.fastq -r 600 -R 2000 -p 200 -k 1 -o new_nanomux -t trim -s split -j 4
 
-# test trim
-$ ./trim -i tests/test.fastq -r 2000 -q 20 -t 4
+# test nanotrim
+$ ./nanotrim -i tests/test.fastq -r 2000 -R 10000 -q 20 -t 4
 ```
 
 ## Nanomux
@@ -50,10 +50,10 @@ bc1,ATACGATGCTA,GTCGATGTCTGA
 bc2,GACACACAC,GTCGATTGATG
 ```
 
-## Trim
-Run `./trim` to get the help message:
+## nanotrim
+Run `./nanotrim` to get the help message:
 ```bash
-[USAGE]: trim -i <input> [options]
+[USAGE]: nanotrim -i <input> [options]
    -i    <input>             Path of folder or file
    -r    <read_length_min>   Minium length of read.    Default: 1
    -R    <read_length_max>   Minium length of read.    Default: INT_MAX
@@ -61,7 +61,7 @@ Run `./trim` to get the help message:
    -t    <threads>           Number of threads to use. Default: 1
 ```
 
-`trim` saves the trimmed reads to a gzipped file with the same name and in the same folder as the original, but with the suffix `.filtered`. The input can be a single file or an entire folder. **NB**: The input files *MUST* be gzipped.
+`nanotrim` saves the trimmed reads to a gzipped file with the same name and in the same folder as the original, but with the suffix `.filtered`. The input can be a single file or an entire folder. **NB**: The input files *MUST* be gzipped.
 
 ## Credit
 `nanomux_c` uses `kseq.h` for fastq parsing, and `nob.h`, written by @tsoding (Alexey Kutepov), for overall useful functions!  
