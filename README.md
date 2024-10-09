@@ -15,7 +15,7 @@ $ ./build.sh
 $ ./nanomux -b tests/bc_test.csv -f tests/test.fastq -r 600 -R 2000 -p 200 -k 1 -o new_nanomux -t trim -s split -j 4
 
 # test nanotrim
-$ ./nanotrim -i tests/test.fastq -r 2000 -R 10000 -q 20 -t 4
+$ ./nanotrim -i tests/test.fastq -r 2000 -R 10000 -q 20 -t 4 -o test_nanotrim
 ```
 
 ## Nanomux
@@ -54,14 +54,22 @@ bc2,GACACACAC,GTCGATTGATG
 Run `./nanotrim` to get the help message:
 ```bash
 [USAGE]: nanotrim -i <input> [options]
-   -i    <input>             Path of folder or file
-   -r    <read_length_min>   Minium length of read.    Default: 1
-   -R    <read_length_max>   Minium length of read.    Default: INT_MAX
-   -q    <quality>           Minimum quality of read.  Default: 1
-   -t    <threads>           Number of threads to use. Default: 1
+"[USAGE]: nanotrim -i <input> [options]\n"
+"   -i    <input>             Path of folder or file\n"
+"   -o    <output>            Name of output folder.\n"
+"   -r    <read_length_min>   Minium length of read.    Optional: Default 1\n"
+"   -R    <read_length_max>   Minium length of read.    Optional: Default INT_MAX\n"
+"   -q    <quality>           Minimum quality of read.  Optional: Default 1\n"
+"   -t    <threads>           Number of threads to use. Optional: Default 1\n";
 ```
 
-`nanotrim` saves the trimmed reads to a gzipped file with the same name and in the same folder as the original, but with the suffix `.filtered`. The input can be a single file or an entire folder. **NB**: The input files *MUST* be gzipped.
+`nanotrim` saves the trimmed reads to a gzipped file with the same name and in the same folder as the original, but with the suffix `.filtered`. The input can be a single file or an entire folder – `nanotrim` knows can distinguish between the two. **NB**: The input files *MUST* be gzipped. 
+
+Example of output:
+bash```
+$ ./nanotrim -i tests/test.fastq -r 2000 -R 10000 -q 20 -t 4
+$ tests/test.fastq: 4788 raw reads (29 passed) --> To short: 4169  | To long: 3     | Low quality: 587
+```
 
 ## Credit
 `nanomux_c` uses `kseq.h` for fastq parsing, and `nob.h`, written by [@tsoding](https://www.github.com/tsoding), for overall useful functions!  
@@ -72,6 +80,7 @@ It also uses `thpool.h` by Johan Hanssen Seferidis.
 - [x] multi threading
 - [x] read splitting
 - [x] Change to threadpool in nanomux
+- [] Add logging to nanotrim
 
 
 
