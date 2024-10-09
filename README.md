@@ -66,9 +66,16 @@ Run `./nanotrim` to get the help message:
 `nanotrim` saves the trimmed reads to a gzipped file with the same name and in the same folder as the original, but with the suffix `.filtered`. The input can be a single file or an entire folder – `nanotrim` knows can distinguish between the two. **NB**: The input files *MUST* be gzipped. 
 
 Example of output:
-bash```
+```bash
 $ ./nanotrim -i tests/test.fastq -r 2000 -R 10000 -q 20 -t 4
 $ tests/test.fastq: 4788 raw reads (29 passed) --> To short: 4169  | To long: 3     | Low quality: 587
+```
+
+`nanotrim` also produces a log file with the above information in a `.csv` format, saved in the output path.
+
+```csv
+file,raw_reads,passed_reads,short,long,bad_quality
+tests/test.fastq,4788,29,4169,3,587
 ```
 
 ## Credit
