@@ -2,7 +2,7 @@
 
 Demultiplex your nanopore (or other) reads! `nanomux` fuzzy matching useful for noisy reads. Written entirely in C, so should compile on most platforms. Depends on `pthreads`. 
 
-In the repo, you can also find `nanotrim` – a small threaded program which you can use to filter out reads with a mean quality and mean length over your decided threshold.
+In the repo, you can also find `nanotrim` – a small threaded program which you can use to filter out reads with a mean quality and between length between min and max.
 
 ## Quick Start
 ```bash
@@ -87,7 +87,7 @@ It also uses `thpool.h` by Johan Hanssen Seferidis.
 - [x] multi threading
 - [x] read splitting
 - [x] Change to threadpool in nanomux
-- [] Add logging to nanotrim
+- [x] Add logging to nanotrim
 
 
 
