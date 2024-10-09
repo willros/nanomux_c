@@ -63,7 +63,7 @@ Run `./nanotrim` to get the help message:
 "   -t    <threads>           Number of threads to use. Optional: Default 1\n";
 ```
 
-`nanotrim` saves the trimmed reads to a gzipped file with the same name and in the same folder as the original, but with the suffix `.filtered`. The input can be a single file or an entire folder – `nanotrim` knows can distinguish between the two. **NB**: The input files *MUST* be gzipped. 
+`nanotrim` saves the trimmed reads to a *gzipped* file in the specified output folder. Uses same name as the original file, but with the suffix `.filtered`. The input can be a single file or an entire folder – `nanotrim` knows can distinguish between the two. **NB**: The input files **MUST** be *gzipped*. 
 
 Example of output:
 ```bash
