@@ -25,8 +25,8 @@
 #include "kseq.h"
 #include <limits.h> 
 #include <stdint.h>
-#include <pthread.h>
-#include "thpool.h"
+#include "cpthread.h"
+#include "tpool.h"
 
 
 int min(int a, int b, int c) {
@@ -74,7 +74,6 @@ int levenshtein_distance(const char *haystack, const char *needle, int k) {
     }
     return end_pos;
 }
-
 
 
 typedef enum {
@@ -604,7 +603,7 @@ int main(int argc, char **argv) {
 
     nob_log(NOB_INFO, "Generating threadpool with %i threads", num_threads);
     printf("\n");
-    threadpool thpool = thpool_init(num_threads);
+    tpool_t *thpool = tpool_create(num_threads);
     
     NanomuxDatas nanomux_datas = {0};
     pthread_mutex_t s_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -622,11 +621,11 @@ int main(int argc, char **argv) {
         nob_da_append(&nanomux_datas, nanomux_data);
     }
     for (int i = 0; i < nanomux_datas.count; i++) {
-    	thpool_add_work(thpool, run_nanomux, (void *)&nanomux_datas.items[i]);
+    	tpool_add_work(thpool, run_nanomux, (void *)&nanomux_datas.items[i]);
     }
 
-	thpool_wait(thpool);
-	thpool_destroy(thpool);
+	tpool_wait(thpool);
+	tpool_destroy(thpool);
 
     pthread_mutex_destroy(&s_mutex);
 

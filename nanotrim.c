@@ -3,11 +3,11 @@
 #include <zlib.h>
 #include "kseq.h"
 #include <stdint.h>
-#include <pthread.h>
+#include "cpthread.h"
+#include "tpool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include "thpool.h"
 #include <string.h>
 
 char *basename(char const *path) {
@@ -309,14 +309,14 @@ int main(int argc, char **argv) {
 
 
     nob_log(NOB_INFO, "Generating threadpool with %i threads", t_arg);
-    threadpool thpool = thpool_init(t_arg);
+    tpool_t *thpool = tpool_create(t_arg);
 
     for (int i = 0; i < fastq_files.count; i++) {
-		thpool_add_work(thpool, task_parse_fastq_file, (void *)&fastq_files.items[i]);
+		tpool_add_work(thpool, task_parse_fastq_file, (void *)&fastq_files.items[i]);
     }
 
-	thpool_wait(thpool);
-	thpool_destroy(thpool);
+	tpool_wait(thpool);
+	tpool_destroy(thpool);
     pthread_mutex_destroy(&print_mutex);
 
     nob_da_free(fastq_files);
