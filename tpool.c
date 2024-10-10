@@ -21,12 +21,7 @@
  * THE SOFTWARE
  */
 
-#ifndef _WIN32
-    #include <pthread.h>
-#else
-    #include "cpthread.h"
-#endif
-
+#include <pthread.h>
 #include <stdlib.h>
 #include "tpool.h"
 #include "xmem.h"
