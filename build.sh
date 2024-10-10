@@ -1,6 +1,6 @@
 #!/bin/bash
 set -xe
 
-cc -o nanomux thpool.c nanomux.c -lz -lpthread -O3 
-cc -o nanotrim nanotrim.c thpool.c -lz -lpthread -lm -O3
+cc -o nanomux nanomux.c tpool.c xmem.c cpthread.c -lpthread -lz -O3
+cc -o nanotrim nanotrim.c tpool.c xmem.c cpthread.c -lpthread -lz -O3
 
