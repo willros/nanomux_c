@@ -156,15 +156,13 @@ int main(int argc, char **argv) {
     // required args
     bool i_arg = false;
     char *input;
-
     char *output;
     bool o_arg = false;
-
 
     // optional args
     int r_arg = 1, q_arg = 1, t_arg = 1, R_arg = INT32_MAX;
     char c;
-    while ((c = getopt (argc, argv, "i:o:r:R:q:t:")) != -1) {
+    while ((c = getopt(argc, argv, "i:o:r:R:q:t:")) != -1) {
         switch (c) {
             case 'i':
                 i_arg = true;
@@ -236,7 +234,7 @@ int main(int argc, char **argv) {
     Files fastq_files = {0};
 
     char log_file[256]; 
-    snprintf(log_file, sizeof(log_file), "%s/nanotrim.log", output);
+    snprintf(log_file, sizeof(log_file), "%s/nanotrim_log.csv", output);
     FILE *LOG_FILE = fopen(log_file, "ab");
     if (LOG_FILE == NULL) {
         nob_log(NOB_ERROR, "Could create log file");

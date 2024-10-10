@@ -1,6 +1,6 @@
 # nanomux_c
 
-Demultiplex your nanopore (or other) reads! `nanomux` fuzzy matching useful for noisy reads. Written entirely in C, so should compile on most platforms. Depends on `pthreads`. 
+Demultiplex your nanopore (or other) reads! `nanomux` fuzzy matching useful for noisy reads. Written entirely in C, so should compile on most systems. It will not work in Windows yet, because it depends on `pthreads` other POSIX specific API. Will try to change this in the future. 
 
 In the repo, you can also find `nanotrim` – a small threaded program which you can use to filter out reads with a mean quality and between length between min and max.
 
@@ -63,7 +63,8 @@ Run `./nanotrim` to get the help message:
 "   -t    <threads>           Number of threads to use. Optional: Default 1\n";
 ```
 
-`nanotrim` saves the trimmed reads to a *gzipped* file in the specified output folder. Uses same name as the original file, but with the suffix `.filtered`. The input can be a single file or an entire folder – `nanotrim` knows can distinguish between the two. **NB**: The input files **MUST** be *gzipped*. 
+`nanotrim` saves the trimmed reads to a fastq in the specified output folder. Uses same name as the original file, but with the suffix `.filtered`. The input can be a single file or an entire folder – `nanotrim` knows can distinguish between the two.  
+
 
 Example of output:
 ```bash
