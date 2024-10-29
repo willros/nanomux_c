@@ -309,21 +309,88 @@ void substring(const char *source, size_t start, size_t length, char *dest) {
     dest[length] = '\0';
 }
 
-void append_read_to_gzip_fastq_trim(gzFile gzfp, Read *read, int start, int end) {
+int append_read_to_gzip_fastq_trim(gzFile gzfp, Read *read, int start, int end) {
+    int result = 0;
+
     if (start < 0) start = 0;
     if (end > (int)read->length) end = read->length;
     size_t trimmed_length = end - start;
-    gzprintf(gzfp, "@%s\n", read->name);
-    gzprintf(gzfp, "%.*s\n", (int)trimmed_length, read->seq + start);
-    gzprintf(gzfp, "+\n");
-    gzprintf(gzfp, "%.*s\n", (int)trimmed_length, read->qual + start);
+
+    size_t buffer_size = trimmed_length + 10; 
+    char *buffer = (char *)malloc(buffer_size);
+
+    if (!buffer) {
+        nob_log(NOB_ERROR, "Memory allocation failed");
+        return 1;
+    }
+
+    int len = snprintf(buffer, buffer_size, "@%s\n", read->name);
+    if (gzwrite(gzfp, buffer, len) != len) {
+        nob_log(NOB_ERROR, "Failed to write name to gzip file");
+        nob_return_defer(1);
+    }
+
+    len = snprintf(buffer, buffer_size, "%.*s\n", (int)trimmed_length, read->seq + start);
+    if (gzwrite(gzfp, buffer, len) != len) {
+        nob_log(NOB_ERROR, "Failed to write trimmed sequence to gzip file");
+        nob_return_defer(1);
+    }
+
+    len = snprintf(buffer, buffer_size, "+\n");
+    if (gzwrite(gzfp, buffer, len) != len) {
+        nob_log(NOB_ERROR, "Failed to write separator to gzip file");
+        nob_return_defer(1);
+    }
+
+    len = snprintf(buffer, buffer_size, "%.*s\n", (int)trimmed_length, read->qual + start);
+    if (gzwrite(gzfp, buffer, len) != len) {
+        nob_log(NOB_ERROR, "Failed to write trimmed quality to gzip file");
+        nob_return_defer(1);
+    }
+
+defer:
+    free(buffer);
+    return result;
 }
 
-void append_read_to_gzip_fastq(gzFile gzfp, Read *read) {
-    gzprintf(gzfp, "@%s\n", read->name);
-    gzprintf(gzfp, "%s\n", read->seq);
-    gzprintf(gzfp, "+\n");
-    gzprintf(gzfp, "%s\n", read->qual);
+int append_read_to_gzip_fastq(gzFile gzfp, Read *read) {
+    int result = 0;
+    size_t max_len = strlen(read->seq);
+    size_t buffer_size = max_len + 10; 
+    char *buffer = (char *)malloc(buffer_size);
+
+    if (!buffer) {
+        nob_log(NOB_ERROR, "Memory allocation failed");
+        return 1;
+    }
+
+    int len = snprintf(buffer, buffer_size, "@%s\n", read->name);
+    if (gzwrite(gzfp, buffer, len) != len) {
+        nob_log(NOB_ERROR, "Failed to write name to gzip file");
+        nob_return_defer(1);
+    }
+
+    len = snprintf(buffer, buffer_size, "%s\n", read->seq);
+    if (gzwrite(gzfp, buffer, len) != len) {
+        nob_log(NOB_ERROR, "Failed to write sequence to gzip file");
+        nob_return_defer(1);
+    }
+
+    len = snprintf(buffer, buffer_size, "+\n");
+    if (gzwrite(gzfp, buffer, len) != len) {
+        nob_log(NOB_ERROR, "Failed to write separator to gzip file");
+        nob_return_defer(1);
+    }
+
+    len = snprintf(buffer, buffer_size, "%s\n", read->qual);
+    if (gzwrite(gzfp, buffer, len) != len) {
+        nob_log(NOB_ERROR, "Failed to write quality to gzip file");
+        nob_return_defer(1);
+    }
+
+defer:
+    free(buffer);
+    return result;
 }
 
 void process_single_barcode(

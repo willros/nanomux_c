@@ -43,11 +43,44 @@ double average_qual(const char *quals, size_t len) {
     return log10(probability_sum / len) * -10.0;
 }
 
-void append_read_to_gzip_fastq(gzFile gzfp, const char *name, const char *seq, const char *qual) {
-    gzprintf(gzfp, "@%s\n", name);
-    gzprintf(gzfp, "%s\n", seq);
-    gzprintf(gzfp, "+\n");
-    gzprintf(gzfp, "%s\n", qual);
+int append_read_to_gzip_fastq(gzFile gzfp, const char *name, const char *seq, const char *qual) {
+    int result = 0;
+    size_t max_len = strlen(seq);
+    size_t buffer_size = max_len + 10; 
+    char *buffer = (char *)malloc(buffer_size);
+
+    if (!buffer) {
+        nob_log(NOB_ERROR, "Memory allocation failed");
+        return 1;
+    }
+
+    int len = snprintf(buffer, buffer_size, "@%s\n", name);
+    if (gzwrite(gzfp, buffer, len) != len) {
+        nob_log(NOB_ERROR, "Failed to write to gzip file");
+        nob_return_defer(1);
+    }
+
+    len = snprintf(buffer, buffer_size, "%s\n", seq);
+    if (gzwrite(gzfp, buffer, len) != len) {
+        nob_log(NOB_ERROR, "Failed to write to gzip file");
+        nob_return_defer(1);
+    }
+
+    len = snprintf(buffer, buffer_size, "+\n");
+    if (gzwrite(gzfp, buffer, len) != len) {
+        nob_log(NOB_ERROR, "Failed to write to gzip file");
+        nob_return_defer(1);
+    }
+
+    len = snprintf(buffer, buffer_size, "%s\n", qual);
+    if (gzwrite(gzfp, buffer, len) != len) {
+        nob_log(NOB_ERROR, "Failed to write to gzip file");
+        nob_return_defer(1);
+    }
+
+defer:
+    free(buffer);
+    return result;
 }
 
 KSEQ_INIT(gzFile, gzread)
@@ -264,7 +297,7 @@ int main(int argc, char **argv) {
 
                 // realpath and outfile
                 snprintf(realpath, sizeof(realpath), "%s/%s", input, file);
-                snprintf(outfile, sizeof(outfile), "%s/%s.filtered", output, file);
+                snprintf(outfile, sizeof(outfile), "%s/%s_nanotrim.fq.gz", output, file);
 
                 File fastq_file = {
                     .min_qual = q_arg,
