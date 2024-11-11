@@ -1,8 +1,9 @@
-# nanomux_c
+# nanoSweet
 
-Demultiplex your nanopore (or other) reads! `nanomux` fuzzy matching useful for noisy reads. Written entirely in C, so should compile on most systems. It will not work in Windows yet, because it depends on `pthreads` other POSIX specific API. Will try to change this in the future. 
+Demultiplex your nanopore (or other) reads! `nanomux` fuzzy matching useful for noisy reads. Written entirely in C, so should compile on most systems. The repo contains a windows branch that uses something else than `pthreads` for threading.
 
-In the repo, you can also find `nanotrim` – a small threaded program which you can use to filter out reads with a mean quality and between length between min and max.
+In the repo, you can also find `nanotrim` – a small threaded program which you can use to filter out reads with a mean quality and between length between min and max. 
+
 The repo also contains `nanodup` – a small threaded program to deduplicate all the reads and saving information about duplication status.
 
 ## Quick Start
