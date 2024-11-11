@@ -3,23 +3,33 @@
 Demultiplex your nanopore (or other) reads! `nanomux` fuzzy matching useful for noisy reads. Written entirely in C, so should compile on most systems. It will not work in Windows yet, because it depends on `pthreads` other POSIX specific API. Will try to change this in the future. 
 
 In the repo, you can also find `nanotrim` – a small threaded program which you can use to filter out reads with a mean quality and between length between min and max.
+The repo also contains `nanodup` – a small threaded program to deduplicate all the reads and saving information about duplication status.
 
 ## Quick Start
 ```bash
 $ git clone https://github.com/willros/nanomux_c.git
 $ cd nanomux_c/
-$ chmod +x build.sh
-$ ./build.sh 
+$ cc -o nob nob.c
+$ ./nob
+```
 
-# test nanomux
+## test nanomux
+```bash
 $ ./nanomux -b tests/bc_test.csv -f tests/test.fastq -r 600 -R 2000 -p 200 -k 1 -o new_nanomux -t trim -s split -j 4
+```
 
-# test nanotrim
+## test nanotrim
+```bash
 $ ./nanotrim -i tests/test.fastq -r 2000 -R 10000 -q 20 -t 4 -o test_nanotrim
 ```
 
-## Nanomux
-Just run `./nanomux` to get the help message:
+## test nanodup
+```bash
+$ ./nanodup -i tests/test.fastq -o test_nanodup
+```
+
+## nanomux
+Run `./nanomux` to get the help message:
 ```bash
 [USAGE]: nanomux 
    -b <barcode>             Path to barcode file.
@@ -78,6 +88,25 @@ $ tests/test.fastq: 4788 raw reads (29 passed) --> To short: 4169  | To long: 3 
 file,raw_reads,passed_reads,short,long,bad_quality
 tests/test.fastq,4788,29,4169,3,587
 ```
+
+## nanodup
+Run `./nanodup` to get the help message:
+```bash
+[ERROR] You must provide the input path
+[ERROR] [USAGE]: nanodup -i <input> -o <output> [options]
+   -i    <input>             Path of folder or file
+   -o    <output>            Name of output folder.
+   -t    <threads>           Number of threads to use. Optional: Default 1
+```
+
+`nanodup` keeps removes all the duplicated reads, *i.e.* identical reads. It only saves the first read if the read is duplicated. `nanodup` also produces a log file with the information about the reads and saves all the de-duplicated reads to a new fastq file. 
+
+Example of output:
+```bash
+$ ./nanodup -i tests/test.fastq -o test_nanodup
+$ [INFO] tests/test.fastq contained: 0 duplicates
+```
+
 
 ## Credit
 `nanomux_c` uses `kseq.h` for fastq parsing, and `nob.h`, written by [@tsoding](https://www.github.com/tsoding), for overall useful functions!  
